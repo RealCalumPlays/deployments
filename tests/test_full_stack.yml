@@ -1,0 +1,20 @@
+---
+# Test playbook: Full stack (Prometheus + Grafana + Backup)
+- name: Test horde_monitoring - Full stack
+  hosts: testhost
+  become: yes
+  gather_facts: yes
+
+  vars:
+    monitoring_install_prometheus: true
+    monitoring_install_grafana: true
+    monitoring_install_influxdb: false
+    monitoring_enable_prometheus_backup: true
+    monitoring_configure_firewall: false
+    prometheus_version: "2.45.0"
+    prometheus_retention_time: "100y"
+    grafana_admin_password: "testpass123"
+    prometheus_backup_compression: "gzip"
+
+  roles:
+    - role: horde_monitoring

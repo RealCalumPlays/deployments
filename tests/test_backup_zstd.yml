@@ -1,0 +1,19 @@
+---
+# Test playbook: Backup with zstd compression
+- name: Test horde_monitoring - Backup with zstd
+  hosts: testhost
+  become: yes
+  gather_facts: yes
+
+  vars:
+    monitoring_install_prometheus: true
+    monitoring_install_grafana: false
+    monitoring_install_influxdb: false
+    monitoring_enable_prometheus_backup: true
+    monitoring_configure_firewall: false
+    prometheus_version: "2.45.0"
+    prometheus_retention_time: "15d"
+    prometheus_backup_compression: "zstd"
+
+  roles:
+    - role: horde_monitoring
