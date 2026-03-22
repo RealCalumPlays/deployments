@@ -1,17 +1,16 @@
 ---
-
 namespace: "haidra"
 name: "deployments"
 version: "0.3.1"
 readme: "README.md"
 authors:
-    - Divided by Zer0 <mail@dbzer0.com>
+  - Divided by Zer0 <mail@dbzer0.com>
 dependencies: {}
 license:
-    - "MIT"
+  - "MIT"
 tags:
-    - haidra
-    - aihorde
+  - haidra
+  - aihorde
 repository: "https://github.com/Haidra-Org/deployments"
 issues: "https://github.com/Haidra-Org/deployments/issues"
 description: Ansible collection for Haidra deployments

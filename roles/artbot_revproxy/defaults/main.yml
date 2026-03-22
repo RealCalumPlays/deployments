@@ -1,10 +1,9 @@
 ---
-
 # The DNS for your artbot site
 artbot_domain: artbot.site
 # Any other domains which might be running in the same server.
 # These will redirect to artbot unless you adjust your haproxy template.
-other_domains: artbot.haidra.net 
+other_domains: artbot.haidra.net
 # The email to provide to certbot
 email: your.email@example.com
 # The address of the server running the ansible service on port 3001

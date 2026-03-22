@@ -1,4 +1,3 @@
 ---
-
 force_build: false
 artbot_status_api: https://whatevermyendpointis.com/api

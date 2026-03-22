@@ -17,14 +17,14 @@
     group: root
     state: directory
   tags:
-  - haproxy
+    - haproxy
 
 - name: Generate an OpenSSL private key with the default values (4096 bits, RSA)
   openssl_privatekey:
     path: /etc/haproxy/cert/{{ artbot_domain }}.key
   when: self_signed_cert
   tags:
-  - haproxy
+    - haproxy
 
 - name: Generate a Self Signed OpenSSL certificate
   openssl_certificate:
@@ -33,16 +33,16 @@
     provider: selfsigned
   when: self_signed_cert
   tags:
-  - haproxy
+    - haproxy
 
 - name: Create merged certificate
   shell: cat /etc/haproxy/cert/{{ artbot_domain }}.key /etc/haproxy/cert/{{ artbot_domain }}.crt > /etc/haproxy/cert/{{ artbot_domain }}.pem
   when: self_signed_cert
   tags:
-  - haproxy
+    - haproxy
 
 - name: Ensure certbot is configured for the domain {{ artbot_domain }}
-  command: > 
+  command: >
     certbot certonly 
     --domains {{ artbot_domain }},{{ other_domains }} 
     --keep-until-expiring 
@@ -52,16 +52,16 @@
     --email {{ email }} 
     --standalone 
     -n --expand
-  tags: 
-  - cert
-  - haproxy
+  tags:
+    - cert
+    - haproxy
   when: not self_signed_cert
 
 - name: Merge certbot certificates for {{ artbot_domain }}
   shell: cat /etc/letsencrypt/live/{{ artbot_domain }}/privkey.pem /etc/letsencrypt/live/{{ artbot_domain }}/fullchain.pem > /etc/haproxy/cert/{{ artbot_domain }}.pem
-  tags: 
-  - cert
-  - haproxy
+  tags:
+    - cert
+    - haproxy
   when: not self_signed_cert
 
 - name: Ensure Haproxy Configuration
@@ -74,7 +74,7 @@
     validate: /usr/sbin/haproxy -f %s -c
   notify: reload haproxy
   tags:
-  - haproxy
+    - haproxy
 
 - name: Ensure certificate renew script exists
   template:
@@ -82,7 +82,7 @@
     dest: /root/certbot_renew.sh
     owner: root
     group: root
-    mode: '0744'
+    mode: "0744"
   tags: haproxy
 
 - name: Add certificate renewal on cron
@@ -91,6 +91,6 @@
     name: Renew Horde Certificate
     special_time: daily
     job: /root/certbot_renew.sh
-  tags: 
-  - haproxy
-  - cron
+  tags:
+    - haproxy
+    - cron

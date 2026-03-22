@@ -1,5 +1,4 @@
 ---
-
 - name: install dependencies
   apt:
     state: latest
@@ -15,12 +14,11 @@
   user:
     name: "{{ worker_username }}"
     shell: /bin/bash
-    groups: 
-    - video
-    - render
+    groups:
+      - video
+      - render
     append: true
   tags: worker
-
 
 - name: Clone Horde github repository
   git:
@@ -32,7 +30,6 @@
   notify: Restart AI Worker service
   tags: worker
 
-  
 - name: Ensure git repo is owned by {{ worker_username }}
   file:
     path: /home/{{ worker_username }}/{{ worker_clone_dir }}
@@ -47,17 +44,17 @@
     owner: "{{ worker_username }}"
     group: "{{ worker_username }}"
     state: directory
-  tags: 
-  - worker
+  tags:
+    - worker
 
 - name: Ensure models_dir dir '{{ models_dir }}' exists.
-  file: 
+  file:
     path: /home/{{ worker_username }}/{{ models_dir }}
     owner: "{{ worker_username }}"
     group: "{{ worker_username }}"
     state: directory
-  tags: 
-  - worker
+  tags:
+    - worker
 
 - name: Deploy bridgeData
   template:
@@ -65,95 +62,95 @@
     dest: /home/{{ worker_username }}/{{ worker_runtime_dir }}/bridgeData.yaml
     owner: "{{ worker_username }}"
     group: "{{ worker_username }}"
-    mode: '0644'
+    mode: "0644"
   notify: Restart AI Worker service
-  tags: 
-  - worker
+  tags:
+    - worker
 
 - name: Ensure update-runtime is run for AMD GPUs
-  shell: /home/{{ worker_username }}/{{ worker_clone_dir }}/update-runtime-rocm.sh 
+  shell: /home/{{ worker_username }}/{{ worker_clone_dir }}/update-runtime-rocm.sh
   become_user: "{{ worker_username }}"
   args:
-     executable: /bin/bash
-     chdir: /home/{{ worker_username }}/{{ worker_clone_dir }}
-  register: update_runtime  
-  when: 
-  - initialize is true
-  - amd_gpu is true
-  tags: 
-  - worker
-  - initialize
+    executable: /bin/bash
+    chdir: /home/{{ worker_username }}/{{ worker_clone_dir }}
+  register: update_runtime
+  when:
+    - initialize is true
+    - amd_gpu is true
+  tags:
+    - worker
+    - initialize
 
 - name: Show update_runtime output
   debug:
     var: update_runtime
-  when: 
-  - initialize is true
-  tags: 
-  - worker
-  - initialize
-  - debug
+  when:
+    - initialize is true
+  tags:
+    - worker
+    - initialize
+    - debug
 
 - name: Ensure update-runtime is run for Nvidia GPUs
   shell: /home/{{ worker_username }}/{{ worker_clone_dir }}/update-runtime.sh
   become_user: "{{ worker_username }}"
   args:
-     executable: /bin/bash
-     chdir: /home/{{ worker_username }}/{{ worker_clone_dir }}
-  register: update_runtime  
-  when: 
-  - initialize is true
-  - amd_gpu is false
-  tags: 
-  - worker
-  - initialize
+    executable: /bin/bash
+    chdir: /home/{{ worker_username }}/{{ worker_clone_dir }}
+  register: update_runtime
+  when:
+    - initialize is true
+    - amd_gpu is false
+  tags:
+    - worker
+    - initialize
 
 - name: Show update_runtime output
   debug:
     var: update_runtime
-  when: 
-  - initialize is true
-  tags: 
-  - worker
-  - initialize
-  - debug
+  when:
+    - initialize is true
+  tags:
+    - worker
+    - initialize
+    - debug
 
 - name: Ensure models are downloaded for the first time
   shell: /home/{{ worker_username }}/{{ worker_clone_dir }}/runtime-rocm.sh python -s /home/{{ worker_username }}/{{ worker_clone_dir }}/download_models.py
   become_user: "{{ worker_username }}"
   args:
-     executable: /bin/bash
-     chdir: /home/{{ worker_username }}/{{ worker_runtime_dir }}
-  when: 
-  - initialize is true
-  - amd_gpu is true
-  tags: 
-  - worker
-  - initialize
+    executable: /bin/bash
+    chdir: /home/{{ worker_username }}/{{ worker_runtime_dir }}
+  when:
+    - initialize is true
+    - amd_gpu is true
+  tags:
+    - worker
+    - initialize
 
 - name: Ensure models are downloaded for the first time
   shell: /home/{{ worker_username }}/{{ worker_clone_dir }}/runtime.sh python -s /home/{{ worker_username }}/{{ worker_clone_dir }}/download_models.py
   become_user: "{{ worker_username }}"
   args:
-     executable: /bin/bash
-     chdir: /home/{{ worker_username }}/{{ worker_runtime_dir }}
-  when: 
-  - initialize is true
-  - amd_gpu is false
-  tags: 
-  - worker
-  - initialize
+    executable: /bin/bash
+    chdir: /home/{{ worker_username }}/{{ worker_runtime_dir }}
+  when:
+    - initialize is true
+    - amd_gpu is false
+  tags:
+    - worker
+    - initialize
 
 - name: Ensure systemd directory exists
   file:
     path: /home/{{ worker_username }}/.config/systemd/user/
     owner: "{{ worker_username }}"
     group: "{{ worker_username }}"
-    mode: '0755'
+    mode: "0755"
     state: directory
-  tags: 
-  - worker
-  - systemd
+  tags:
+    - worker
+    - systemd
 
 - name: Ensure horde systemd services exist in userspace
   template:
@@ -161,37 +158,37 @@
     dest: /home/{{ worker_username }}/.config/systemd/user/{{ worker_service_name }}.service
     owner: "{{ worker_username }}"
     group: "{{ worker_username }}"
-    mode: '0644'
+    mode: "0644"
   notify: Restart AI Worker service
-  tags: 
-  - worker
-  - systemd
-  
+  tags:
+    - worker
+    - systemd
+
 - name: Ensure XDG_RUNTIME_DIR is set in user's .bashrc
   lineinfile:
     path: /home/{{ worker_username }}/.bashrc
     line: export XDG_RUNTIME_DIR=/run/user/$(id -u)
     owner: "{{ worker_username }}"
     group: "{{ worker_username }}"
-  tags: 
-  - worker
-  - systemd
+  tags:
+    - worker
+    - systemd
 
 - name: Enable {{ worker_username }} lingering if needed
   command: loginctl enable-linger {{ worker_username }}
   args:
     creates: /var/lib/systemd/linger/{{ worker_username }}
-  tags: 
-  - worker
-  - systemd
+  tags:
+    - worker
+    - systemd
 
 # Needed for the next task
 - name: Find {{ worker_username }} uid
   getent:
     database: passwd
-  tags: 
-  - worker
-  - systemd
+  tags:
+    - worker
+    - systemd
 
 - name: Ensure AI Worker service is started
   systemd:
@@ -204,6 +201,6 @@
     XDG_RUNTIME_DIR: "/run/user/{{ getent_passwd[worker_username].1 }}"
   become_user: "{{ worker_username }}"
   register: service_started
-  tags: 
-  - worker
-  - systemd
+  tags:
+    - worker
+    - systemd

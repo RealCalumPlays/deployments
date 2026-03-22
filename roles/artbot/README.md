@@ -1,6 +1,6 @@
 # Artbot
 
-Deploys an artbot npm/pm2 service installation. 
+Deploys an artbot npm/pm2 service installation.
 
 Every time this role is run, if there's a new commit in the relevant repository, this will rebuild artbot and redeploy it in a new directory named after the commit hash. The `latest` symlink will then always point the the currently used deploy directory.
 

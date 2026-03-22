@@ -1,15 +1,13 @@
 ---
-
 - hosts: regen_server
 
   roles:
-  - name: haidra.deployments.horde_regen_worker
-    tags: regen
-
+    - name: haidra.deployments.horde_regen_worker
+      tags: regen
 # Uncomment and use this for AMD GPUs instead
-  # roles:
-  # - name: haidra.deployments.amd_gpu_drivers
-  # - name: haidra.deployments.horde_regen_worker
-  #   vars:
-  #     amd_gpu: true
-  #   tags: regen
+# roles:
+# - name: haidra.deployments.amd_gpu_drivers
+# - name: haidra.deployments.horde_regen_worker
+#   vars:
+#     amd_gpu: true
+#   tags: regen

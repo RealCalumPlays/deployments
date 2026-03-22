@@ -6,8 +6,8 @@ The default variables contain all the arguments required for a worker's [bridgeD
 
 In addition you can pass the following 2 vars
 
-* `worker_username`: The Worker service will run in userspace using systemd, this is the username under which the service should run. It doesn't have to be be root or have sudo access.
-* `worker_environment`: Any environment args you might need to pass to the worker process such as `ROCR_VISIBLE_DEVICES=0` etc
+- `worker_username`: The Worker service will run in userspace using systemd, this is the username under which the service should run. It doesn't have to be be root or have sudo access.
+- `worker_environment`: Any environment args you might need to pass to the worker process such as `ROCR_VISIBLE_DEVICES=0` etc
 
 # Instructions
 
@@ -19,5 +19,3 @@ In addition you can pass the following 2 vars
 ```bash
 ansible-playbook regen_worker.yml -i inventory.yml
 ```
-
-

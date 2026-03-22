@@ -60,12 +60,10 @@ queue_size: 1
 # max_power or max_batch.
 max_batch: 1
 
-
 # When Enabled will run CLIP model (Checking for potential CSAM or NSFW) on GPU insted of CPU
 # Enable this on cards with 12gb or more VRAM to increase the rate you complete jobs
 # You can enable this on cards with less VRAM if you do not load SD2.0 or SDXL models, and keep your max_power low (<32)
 safety_on_gpu: false
-
 
 # If set to True, this worker will not only pick up jobs where the user has the required kudos upfront.
 # Effectively this will exclude all anonymous accounts, and registered accounts who haven't contributed.
@@ -154,7 +152,6 @@ max_models_to_download: 10 # Currently unused in regen
 # The frequency (in seconds) to output worker summary stats, such as kudos per hour.
 # Set to zero to disable stats output completely.
 stats_output_frequency: 30
-
 
 # The location in which stable diffusion ckpt models are stored
 # This is overriden by regen_worker_models above

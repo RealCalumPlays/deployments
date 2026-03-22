@@ -1,28 +1,24 @@
 ---
-
-
 - name: Ensure kernel packages are installed
   apt:
     state: latest
     update_cache: true
     pkg:
-      - "linux-headers-{{ ansible_kernel }}" 
+      - "linux-headers-{{ ansible_kernel }}"
       - "linux-modules-extra-{{ ansible_kernel }}"
   notify: Reboot the server
   tags:
     - packages
     - rocm
 
-
 - name: Ensure {{ ansible_user }} is in the right groups
   user:
     name: "{{ ansible_user }}"
-    groups: 
-    - video
-    - render
+    groups:
+      - video
+      - render
     append: true
   tags: rocm
-
 
 - name: Ensure the relevant deb package is installed
   ansible.builtin.apt:
@@ -68,7 +64,6 @@
     - packages
     - amdfan
 
-
 - name: Ensure /etc/amdgpu-fan.yml exists
   file:
     path: /etc/amdgpu-fan.yml
@@ -76,7 +71,7 @@
   tags:
     - amdfan
 
-- name: Ensure amdfan-gpu is configured 
+- name: Ensure amdfan-gpu is configured
   copy:
     src: amdgpu-fan.service.ini
     dest: /etc/systemd/system/amdgpu-fan.service
@@ -89,6 +84,6 @@
     daemon_reload: yes
     name: amdgpu-fan
     enabled: True
-  tags: 
-  - amdfan
-  - systemd
+  tags:
+    - amdfan
+    - systemd

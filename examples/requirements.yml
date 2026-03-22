@@ -1,6 +1,6 @@
 ---
 roles:
   - geerlingguy.swap
-  
+
 collections:
   - git+https://github.com/Haidra-Org/deployments

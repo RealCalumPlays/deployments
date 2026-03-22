@@ -1,6 +1,4 @@
 ---
-
-
 - name: Restart AI Worker service
   systemd:
     state: restart
@@ -12,6 +10,6 @@
     XDG_RUNTIME_DIR: "/run/user/{{ getent_passwd[worker_username].1 }}"
   become_user: "{{ worker_username }}"
   when: not service_started.changed
-  tags: 
-  - worker
-  - systemd
+  tags:
+    - worker
+    - systemd
