@@ -1,59 +1,72 @@
+---
 - name: Create artbot user
-  user:
+  ansible.builtin.user:
     name: artbot
     shell: /bin/bash
   tags: artbot_app
 
 - name: Download nvm installer
-  get_url:
+  ansible.builtin.get_url:
     url: https://raw.githubusercontent.com/nvm-sh/nvm/v0.39.7/install.sh
     dest: /tmp/install.sh
-    mode: 0755
+    mode: "0755"
+  become: true
   become_user: artbot
   tags: artbot_app
 
 - name: Execute the nvm installer
-  shell: /tmp/install.sh
+  ansible.builtin.command: /tmp/install.sh
+  become: true
   become_user: artbot
+  changed_when: true
   tags: artbot_app
 
 - name: Install nvm
-  shell: source /home/artbot/.nvm/nvm.sh && nvm install v18.19.0
+  ansible.builtin.shell: source /home/artbot/.nvm/nvm.sh && nvm install v18.19.0
   args:
     executable: /bin/bash
+  become: true
   become_user: artbot
   register: nvm_out
   changed_when: "not 'is already installed' in nvm_out.stderr"
   tags: artbot_app
 
 - name: Install pm2
-  shell: source /home/artbot/.nvm/nvm.sh && npm install -g pm2
+  ansible.builtin.shell: source /home/artbot/.nvm/nvm.sh && npm install -g pm2
   args:
     executable: /bin/bash
   register: nvm_out
+  become: true
   become_user: artbot
+  changed_when: true
   tags: artbot_app
 
 - name: Setup pm2 service
-  shell: env PATH=$PATH:/home/artbot/.nvm/versions/node/v18.19.0/bin /home/artbot/.nvm/versions/node/v18.19.0/lib/node_modules/pm2/bin/pm2 startup systemd -u artbot --hp /home/artbot
+  ansible.builtin.shell: env PATH=$PATH:/home/artbot/.nvm/versions/node/v18.19.0/bin /home/artbot/.nvm/versions/node/v18.19.0/lib/node_modules/pm2/bin/pm2
+    startup systemd -u artbot --hp /home/artbot
   args:
     executable: /bin/bash
+  changed_when: true
   tags: artbot_app
 
 - name: Install pm2-logrotate
-  shell: source /home/artbot/.nvm/nvm.sh && pm2 install pm2-logrotate
+  ansible.builtin.shell: source /home/artbot/.nvm/nvm.sh && pm2 install pm2-logrotate
   args:
     executable: /bin/bash
+  become: true
   become_user: artbot
+  changed_when: true
   tags: artbot_app
 
-- name: Clone Artbot github repository
-  git:
+- name: Clone Artbot github repository # noqa: latest[git]
+  ansible.builtin.git:
     repo: https://github.com/Haidra-Org/artbot
     dest: /home/artbot/artbot
-    clone: yes
-    update: yes
-    force: yes
+    clone: true
+    update: true
+    force: true
+    version: HEAD
+  become: true
   become_user: artbot
   register: git
   tags:
@@ -61,53 +74,59 @@
     - update
 
 - name: Install artbot npm
-  shell: source /home/artbot/.nvm/nvm.sh && npm install
+  ansible.builtin.shell: source /home/artbot/.nvm/nvm.sh && npm install
   args:
     executable: /bin/bash
     chdir: /home/artbot/artbot
+  become: true
   become_user: artbot
+  changed_when: true
   tags:
     - artbot_app
     - update
 
 - name: Build artbot
-  shell: source /home/artbot/.nvm/nvm.sh && npm run build
+  ansible.builtin.shell: source /home/artbot/.nvm/nvm.sh && npm run build
   args:
     executable: /bin/bash
     chdir: /home/artbot/artbot
   environment:
     NEXT_PUBLIC_NO_BETA: "true"
     ARTBOT_STATUS_API: "{{ artbot_status_api }}"
+  become: true
   become_user: artbot
+  changed_when: true
   when: git.changed is true or force_build
   tags:
     - artbot_app
     - update
 
 - name: Ensure artbot deploy location exists
-  file:
+  ansible.builtin.file:
     path: /home/artbot/builds
     owner: artbot
     group: artbot
     state: directory
+    mode: "0755"
   tags:
     - artbot_app
     - update
 
 - name: Ensure new build is hashstamped
-  copy:
+  ansible.builtin.copy:
     src: /home/artbot/artbot/.next/standalone/
     remote_src: true
     dest: /home/artbot/builds/{{ git.after }}
     owner: artbot
     group: artbot
+    mode: "0755"
   when: git.changed is true or force_build
   tags:
     - artbot_app
     - update
 
 - name: Ensure 'latest' symlink points to the latest build
-  file:
+  ansible.builtin.file:
     path: /home/artbot/builds/latest
     src: /home/artbot/builds/{{ git.after }}
     force: true
@@ -118,11 +137,13 @@
     - update
 
 - name: Ensure old artbot process is stopped
-  shell: source /home/artbot/.nvm/nvm.sh && pm2 stop artbot && pm2 delete artbot
+  ansible.builtin.shell: source /home/artbot/.nvm/nvm.sh && pm2 stop artbot && pm2 delete artbot
   args:
     executable: /bin/bash
     chdir: /home/artbot/builds/latest
+  become: true
   become_user: artbot
+  changed_when: true
   when: git.changed is true or force_build
   register: artbot_stop
   failed_when:
@@ -133,11 +154,13 @@
     - update
 
 - name: Ensure artbot is started
-  shell: source /home/artbot/.nvm/nvm.sh && pm2 start ecosystem.config.js --only artbot && pm2 save
+  ansible.builtin.shell: source /home/artbot/.nvm/nvm.sh && pm2 start ecosystem.config.js --only artbot && pm2 save
   args:
     executable: /bin/bash
     chdir: /home/artbot/builds/latest
+  become: true
   become_user: artbot
+  changed_when: true
   when: git.changed is true or force_build
   tags:
     - artbot_app

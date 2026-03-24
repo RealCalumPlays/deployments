@@ -1,7 +1,7 @@
 ---
-- name: install dependencies
-  apt:
-    state: latest
+- name: Install dependencies
+  ansible.builtin.apt:
+    state: present
     update_cache: true
     pkg:
       - git
@@ -11,7 +11,7 @@
     - worker
 
 - name: Ensure {{ worker_username }} user exists
-  user:
+  ansible.builtin.user:
     name: "{{ worker_username }}"
     shell: /bin/bash
     groups:
@@ -21,17 +21,17 @@
   tags: worker
 
 - name: Clone Horde github repository
-  git:
+  ansible.builtin.git:
     repo: "{{ regen_worker_repo }}"
     dest: /home/{{ worker_username }}/{{ worker_clone_dir }}
-    clone: yes
-    update: yes
+    clone: true
+    update: true
     version: "{{ regen_worker_repo_version }}"
   notify: Restart AI Worker service
   tags: worker
 
 - name: Ensure git repo is owned by {{ worker_username }}
-  file:
+  ansible.builtin.file:
     path: /home/{{ worker_username }}/{{ worker_clone_dir }}
     owner: "{{ worker_username }}"
     group: "{{ worker_username }}"
@@ -39,25 +39,27 @@
   tags: worker
 
 - name: Ensure worker_runtime_dir '{{ worker_runtime_dir }}' exists.
-  file:
+  ansible.builtin.file:
     path: /home/{{ worker_username }}/{{ worker_runtime_dir }}
     owner: "{{ worker_username }}"
     group: "{{ worker_username }}"
     state: directory
+    mode: "0755"
   tags:
     - worker
 
 - name: Ensure models_dir dir '{{ models_dir }}' exists.
-  file:
+  ansible.builtin.file:
     path: /home/{{ worker_username }}/{{ models_dir }}
     owner: "{{ worker_username }}"
     group: "{{ worker_username }}"
     state: directory
+    mode: "0755"
   tags:
     - worker
 
 - name: Deploy bridgeData
-  template:
+  ansible.builtin.template:
     src: bridgeData.yaml.j2
     dest: /home/{{ worker_username }}/{{ worker_runtime_dir }}/bridgeData.yaml
     owner: "{{ worker_username }}"
@@ -68,8 +70,10 @@
     - worker
 
 - name: Ensure update-runtime is run for AMD GPUs
-  shell: /home/{{ worker_username }}/{{ worker_clone_dir }}/update-runtime-rocm.sh
+  ansible.builtin.shell: /home/{{ worker_username }}/{{ worker_clone_dir }}/update-runtime-rocm.sh
+  become: true
   become_user: "{{ worker_username }}"
+  changed_when: true
   args:
     executable: /bin/bash
     chdir: /home/{{ worker_username }}/{{ worker_clone_dir }}
@@ -82,7 +86,7 @@
     - initialize
 
 - name: Show update_runtime output
-  debug:
+  ansible.builtin.debug:
     var: update_runtime
   when:
     - initialize is true
@@ -92,8 +96,10 @@
     - debug
 
 - name: Ensure update-runtime is run for Nvidia GPUs
-  shell: /home/{{ worker_username }}/{{ worker_clone_dir }}/update-runtime.sh
+  ansible.builtin.shell: /home/{{ worker_username }}/{{ worker_clone_dir }}/update-runtime.sh
+  become: true
   become_user: "{{ worker_username }}"
+  changed_when: true
   args:
     executable: /bin/bash
     chdir: /home/{{ worker_username }}/{{ worker_clone_dir }}
@@ -106,7 +112,7 @@
     - initialize
 
 - name: Show update_runtime output
-  debug:
+  ansible.builtin.debug:
     var: update_runtime
   when:
     - initialize is true
@@ -116,8 +122,11 @@
     - debug
 
 - name: Ensure models are downloaded for the first time
-  shell: /home/{{ worker_username }}/{{ worker_clone_dir }}/runtime-rocm.sh python -s /home/{{ worker_username }}/{{ worker_clone_dir }}/download_models.py
+  ansible.builtin.shell: /home/{{ worker_username }}/{{ worker_clone_dir }}/runtime-rocm.sh python -s /home/{{ worker_username }}/{{ worker_clone_dir
+    }}/download_models.py
+  become: true
   become_user: "{{ worker_username }}"
+  changed_when: true
   args:
     executable: /bin/bash
     chdir: /home/{{ worker_username }}/{{ worker_runtime_dir }}
@@ -129,8 +138,11 @@
     - initialize
 
 - name: Ensure models are downloaded for the first time
-  shell: /home/{{ worker_username }}/{{ worker_clone_dir }}/runtime.sh python -s /home/{{ worker_username }}/{{ worker_clone_dir }}/download_models.py
+  ansible.builtin.shell: /home/{{ worker_username }}/{{ worker_clone_dir }}/runtime.sh python -s /home/{{ worker_username }}/{{ worker_clone_dir
+    }}/download_models.py
+  become: true
   become_user: "{{ worker_username }}"
+  changed_when: true
   args:
     executable: /bin/bash
     chdir: /home/{{ worker_username }}/{{ worker_runtime_dir }}
@@ -142,7 +154,7 @@
     - initialize
 
 - name: Ensure systemd directory exists
-  file:
+  ansible.builtin.file:
     path: /home/{{ worker_username }}/.config/systemd/user/
     owner: "{{ worker_username }}"
     group: "{{ worker_username }}"
@@ -153,7 +165,7 @@
     - systemd
 
 - name: Ensure horde systemd services exist in userspace
-  template:
+  ansible.builtin.template:
     src: ai_horde_worker.j2
     dest: /home/{{ worker_username }}/.config/systemd/user/{{ worker_service_name }}.service
     owner: "{{ worker_username }}"
@@ -165,7 +177,7 @@
     - systemd
 
 - name: Ensure XDG_RUNTIME_DIR is set in user's .bashrc
-  lineinfile:
+  ansible.builtin.lineinfile:
     path: /home/{{ worker_username }}/.bashrc
     line: export XDG_RUNTIME_DIR=/run/user/$(id -u)
     owner: "{{ worker_username }}"
@@ -175,7 +187,7 @@
     - systemd
 
 - name: Enable {{ worker_username }} lingering if needed
-  command: loginctl enable-linger {{ worker_username }}
+  ansible.builtin.command: loginctl enable-linger {{ worker_username }}
   args:
     creates: /var/lib/systemd/linger/{{ worker_username }}
   tags:
@@ -184,21 +196,22 @@
 
 # Needed for the next task
 - name: Find {{ worker_username }} uid
-  getent:
+  ansible.builtin.getent:
     database: passwd
   tags:
     - worker
     - systemd
 
 - name: Ensure AI Worker service is started
-  systemd:
+  ansible.builtin.systemd:
     state: started
-    daemon_reload: yes
+    daemon_reload: true
     name: "{{ worker_service_name }}"
-    enabled: True
+    enabled: true
     scope: user
   environment:
     XDG_RUNTIME_DIR: "/run/user/{{ getent_passwd[worker_username].1 }}"
+  become: true
   become_user: "{{ worker_username }}"
   register: service_started
   tags:

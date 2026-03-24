@@ -1,0 +1,16 @@
+---
+# Ansible-lint configuration for haidra.deployments collection
+exclude_paths:
+  - local-deploy/
+  - .venv/
+  - .git/
+  - .ansible/
+
+skip_list:
+  # 586 violations — renaming all role vars is too disruptive for existing playbooks
+  - var-naming[no-role-prefix]
+  # Jinja2 in task names is used intentionally for clarity
+  - name[template]
+
+warn_list:
+  - yaml[comments]

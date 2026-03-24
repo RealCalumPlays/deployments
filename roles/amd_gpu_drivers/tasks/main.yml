@@ -1,7 +1,7 @@
 ---
 - name: Ensure kernel packages are installed
-  apt:
-    state: latest
+  ansible.builtin.apt:
+    state: present
     update_cache: true
     pkg:
       - "linux-headers-{{ ansible_kernel }}"
@@ -12,7 +12,7 @@
     - rocm
 
 - name: Ensure {{ ansible_user }} is in the right groups
-  user:
+  ansible.builtin.user:
     name: "{{ ansible_user }}"
     groups:
       - video
@@ -25,8 +25,8 @@
     deb: https://repo.radeon.com/amdgpu-install/6.2/ubuntu/jammy/amdgpu-install_6.2.60200-1_all.deb
 
 - name: Ensure rocm packages are installed
-  apt:
-    state: latest
+  ansible.builtin.apt:
+    state: present
     update_cache: true
     pkg:
       - amdgpu-dkms
@@ -42,10 +42,11 @@
     - rocm
 
 - name: Ensure ROCm Libraries exist in Loader Path
-  lineinfile:
+  ansible.builtin.lineinfile:
     dest: /etc/ld.so.conf.d/rocm.conf
     line: "{{ item }}"
     create: true
+    mode: "0644"
   loop:
     - /opt/rocm/lib
     - /opt/rocm/lib64
@@ -53,7 +54,8 @@
     - rocm
 
 - name: Run ldconfig
-  shell: ldconfig
+  ansible.builtin.command: ldconfig
+  changed_when: true
   tags:
     - rocm
 
@@ -65,25 +67,27 @@
     - amdfan
 
 - name: Ensure /etc/amdgpu-fan.yml exists
-  file:
+  ansible.builtin.file:
     path: /etc/amdgpu-fan.yml
     state: touch
+    mode: "0644"
   tags:
     - amdfan
 
 - name: Ensure amdfan-gpu is configured
-  copy:
+  ansible.builtin.copy:
     src: amdgpu-fan.service.ini
     dest: /etc/systemd/system/amdgpu-fan.service
+    mode: "0644"
   tags:
     - amdfan
 
 - name: Ensure amdgpu-fan service is started
-  systemd:
+  ansible.builtin.systemd:
     state: started
-    daemon_reload: yes
+    daemon_reload: true
     name: amdgpu-fan
-    enabled: True
+    enabled: true
   tags:
     - amdfan
     - systemd

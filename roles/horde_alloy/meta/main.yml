@@ -1,6 +1,5 @@
 ---
 dependencies: []
-
 galaxy_info:
   author: "Haidra Org"
   description: "Deploy Grafana Alloy as a telemetry collector on application hosts"

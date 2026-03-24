@@ -3,26 +3,26 @@
 # Grafana connects to Mimir via the shared Docker monitoring network
 
 - name: Verify Docker is available
-  command: docker --version
+  ansible.builtin.command: docker --version
   changed_when: false
   failed_when: false
   register: _docker_check
   become: true
 
 - name: Fail if Docker is not installed
-  fail:
+  ansible.builtin.fail:
     msg: "Docker is required for the monitoring stack. Please install Docker first."
   when: _docker_check.rc != 0
 
 - name: Verify Docker Compose V2 is available
-  command: docker compose version
+  ansible.builtin.command: docker compose version
   changed_when: false
   failed_when: _compose_check.rc != 0
   register: _compose_check
   become: true
 
 - name: Fail if Docker Compose V2 is not available
-  fail:
+  ansible.builtin.fail:
     msg: >-
       Docker Compose V2 plugin is required but 'docker compose version' failed.
       The standalone docker-compose (V1) is end-of-life. Please install the
@@ -34,7 +34,7 @@
 # (CI/test environments) since passwords are irrelevant without running services.
 
 - name: Fail if default MinIO password is unchanged
-  fail:
+  ansible.builtin.fail:
     msg: >-
       minio_root_password is still set to the default placeholder
       'changeme-minio-secret'. Override it in your inventory or vault.
@@ -45,7 +45,7 @@
     - minio_root_password == "changeme-minio-secret"
 
 - name: Fail if default Grafana password is unchanged
-  fail:
+  ansible.builtin.fail:
     msg: >-
       grafana_admin_password is still set to the default placeholder
       'changeme'. Override it in your inventory or vault.
@@ -55,7 +55,7 @@
     - grafana_admin_password == "changeme"
 
 - name: Create MinIO data directory
-  file:
+  ansible.builtin.file:
     path: "{{ minio_data_dir }}"
     state: directory
     owner: root
@@ -65,7 +65,7 @@
   when: mimir_enable_minio | bool
 
 - name: Create Mimir directories
-  file:
+  ansible.builtin.file:
     path: "{{ item }}"
     state: directory
     owner: root
@@ -82,7 +82,7 @@
     - "{{ mimir_compose_dir }}"
 
 - name: Create Mimir filesystem-only directories
-  file:
+  ansible.builtin.file:
     path: "{{ item }}"
     state: directory
     owner: root
@@ -95,7 +95,7 @@
   when: not (mimir_enable_minio | bool)
 
 - name: Create Grafana directories
-  file:
+  ansible.builtin.file:
     path: "{{ item }}"
     state: directory
     owner: "472"
@@ -111,58 +111,58 @@
   when: monitoring_install_grafana | bool
 
 - name: Template Mimir configuration
-  template:
+  ansible.builtin.template:
     src: mimir.yaml.j2
     dest: "{{ mimir_config_dir }}/mimir.yaml"
     owner: root
     group: root
     mode: "0600"
-    backup: yes
+    backup: true
   become: true
-  notify: restart monitoring stack
+  notify: Restart monitoring stack
 
 - name: Template Mimir runtime overrides
-  template:
+  ansible.builtin.template:
     src: mimir-runtime-overrides.yaml.j2
     dest: "{{ mimir_config_dir }}/runtime-overrides.yaml"
     owner: root
     group: root
     mode: "0600"
-    backup: yes
+    backup: true
   become: true
-  notify: restart monitoring stack
+  notify: Restart monitoring stack
 
 - name: Template Docker Compose for monitoring stack
-  template:
+  ansible.builtin.template:
     src: docker-compose.monitoring.yml.j2
     dest: "{{ mimir_compose_dir }}/docker-compose.yml"
     owner: root
     group: root
     mode: "0600"
-    backup: yes
+    backup: true
   become: true
-  notify: restart monitoring stack
+  notify: Restart monitoring stack
 
 - name: Template systemd service for monitoring stack
-  template:
+  ansible.builtin.template:
     src: mimir-monitoring.service.j2
     dest: /etc/systemd/system/mimir-monitoring.service
     mode: "0644"
   become: true
   notify:
-    - reload systemd
+    - Reload systemd
 
 - name: Enable and start monitoring stack
-  systemd:
+  ansible.builtin.systemd:
     name: mimir-monitoring
-    enabled: yes
+    enabled: true
     state: started
-    daemon_reload: yes
+    daemon_reload: true
   become: true
   when: monitoring_start_services | bool
 
 - name: Wait for MinIO to become ready
-  uri:
+  ansible.builtin.uri:
     url: "http://127.0.0.1:{{ minio_api_port }}/minio/health/live"
     method: GET
     status_code: 200
@@ -174,7 +174,7 @@
   become: true
 
 - name: Wait for Mimir to become ready
-  uri:
+  ansible.builtin.uri:
     url: "http://127.0.0.1:{{ mimir_port }}/ready"
     method: GET
     status_code: 200
@@ -188,7 +188,7 @@
 # --- Offsite backup via MinIO mirror (Plan 006) ---
 
 - name: Fail if backup enabled but no target configured
-  fail:
+  ansible.builtin.fail:
     msg: >-
       mimir_backup_enabled is true but mimir_backup_target_endpoint is empty.
       MinIO runs in single-drive mode with zero redundancy — a disk failure
@@ -201,7 +201,7 @@
     - monitoring_start_services | bool
 
 - name: Warn if backup is disabled
-  debug:
+  ansible.builtin.debug:
     msg: >-
       WARNING: MinIO backup is disabled. MinIO is running in single-drive
       mode with no redundancy. A disk failure will result in permanent
@@ -212,49 +212,49 @@
     - mimir_enable_minio | bool
 
 - name: Template MinIO backup environment file
-  template:
+  ansible.builtin.template:
     src: mimir-backup.env.j2
     dest: "{{ mimir_config_dir }}/mimir-backup.env"
     owner: root
     group: root
     mode: "0600"
-    backup: yes
+    backup: true
   become: true
-  notify: reload systemd
+  notify: Reload systemd
   when:
     - mimir_backup_enabled | bool
     - mimir_enable_minio | bool
 
 - name: Template MinIO backup service
-  template:
+  ansible.builtin.template:
     src: mimir-backup.service.j2
     dest: /etc/systemd/system/mimir-backup.service
     owner: root
     group: root
     mode: "0600"
   become: true
-  notify: reload systemd
+  notify: Reload systemd
   when:
     - mimir_backup_enabled | bool
     - mimir_enable_minio | bool
 
 - name: Template MinIO backup timer
-  template:
+  ansible.builtin.template:
     src: mimir-backup.timer.j2
     dest: /etc/systemd/system/mimir-backup.timer
     mode: "0644"
   become: true
-  notify: reload systemd
+  notify: Reload systemd
   when:
     - mimir_backup_enabled | bool
     - mimir_enable_minio | bool
 
 - name: Enable and start MinIO backup timer
-  systemd:
+  ansible.builtin.systemd:
     name: mimir-backup.timer
-    enabled: yes
+    enabled: true
     state: started
-    daemon_reload: yes
+    daemon_reload: true
   become: true
   when:
     - mimir_backup_enabled | bool

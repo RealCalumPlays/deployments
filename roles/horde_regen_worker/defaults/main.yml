@@ -1,5 +1,5 @@
 ---
-## Ansible vars
+# # Ansible vars
 # The username of the user under which the worker will run
 # For your local workfstation, you can use your own username
 worker_username: hworker
@@ -39,7 +39,6 @@ api_key: "0000000000"
 # Put other users whose prompts you want to prioritize.
 # The owner's username is always included so you don't need to add it here if you use the key specified in `api_key` for requests
 priority_usernames: []
-
 # The amount of parallel jobs to pick up for the horde.
 # Only high end cards (e.g, 3080 or better) benefit from this setting.
 # If you have a 20xx or earlier, or a xx60/xx70, do not change this setting from 1.
@@ -99,7 +98,6 @@ max_power: 8
 
 # A list of words which you do not want to your worker to accept if they are in the prompt
 blacklist: []
-
 # If you do not want to serve NSFW images, set this to false.
 nsfw: true
 
@@ -108,7 +106,6 @@ censor_nsfw: false
 
 # A list of words for which you always want to censor, even if `nsfw` is true.
 censorlist: []
-
 # Accept jobs which use a user-supplied image.
 allow_img2img: true
 
@@ -179,21 +176,21 @@ stats_output_frequency: 30
 #
 models_to_load:
   - "top 2"
-  #- "ALL MODELS"
-  #- "TOP 3"
-  #- "ALL SFW"
-  #- "stable_diffusion_2.1"
-  #- "stable_diffusion"
-  #- "Anything Diffusion"
-  #- "Yiffy"
-  #- "waifu_diffusion"
-  #- "Arcane Diffusion"
-  #- "Spider-Verse Diffusion"
-  #- "Elden Ring Diffusion"
-  #- "Robo-Diffusion"
-  #- "mo-di-diffusion"
-  #- "Knollingcase"
-  #- "stable_diffusion_inpainting"
+  # - "ALL MODELS"
+  # - "TOP 3"
+  # - "ALL SFW"
+  # - "stable_diffusion_2.1"
+  # - "stable_diffusion"
+  # - "Anything Diffusion"
+  # - "Yiffy"
+  # - "waifu_diffusion"
+  # - "Arcane Diffusion"
+  # - "Spider-Verse Diffusion"
+  # - "Elden Ring Diffusion"
+  # - "Robo-Diffusion"
+  # - "mo-di-diffusion"
+  # - "Knollingcase"
+  # - "stable_diffusion_inpainting"
 
 # This is used when `dynamic_models` is true or TOP n models are selected in models_to_load
 # The models in this list will not be loaded when they exist in the top models
@@ -205,12 +202,12 @@ models_to_skip:
   - "SDXL_beta::stability.ai#6901" # Do not remove this, as this model would never work
   - A to Zovya RPG # This model is known to cause problems with regen
   # - ALL NSFW MODELS
-  #- "stable_diffusion_inpainting"  # Inpainting is generally quite heavy along with other models for smaller GPUs.
-  #- "stable_diffusion_2.1"  # Stable diffusion 2.1 has bigger memory requirements than 1.5, so if your card cannot lift, it, disable it
-  #- "stable_diffusion_2.0"  # Same as Stable diffusion 2.1
+  # - "stable_diffusion_inpainting"  # Inpainting is generally quite heavy along with other models for smaller GPUs.
+  # - "stable_diffusion_2.1"  # Stable diffusion 2.1 has bigger memory requirements than 1.5, so if your card cannot lift, it, disable it
+  # - "stable_diffusion_2.0"  # Same as Stable diffusion 2.1
   ## Popular NSFW models:
-  #- "Zeipher Female Model"
-  #- "Hentai Diffusion"
+  # - "Zeipher Female Model"
+  # - "Hentai Diffusion"
 
 # If you are getting messages about jobs taking too long, you can change this to true if you no longer want to see them
 # Please note, that if you *are* getting these messages, you are serving jobs much slower than is ideal,

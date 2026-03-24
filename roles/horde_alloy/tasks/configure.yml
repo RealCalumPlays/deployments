@@ -28,7 +28,7 @@
     mode: "0640"
     backup: true
   become: true
-  notify: restart alloy
+  notify: Restart alloy
 
 - name: Configure Alloy systemd environment overrides
   ansible.builtin.template:
@@ -38,7 +38,7 @@
     group: root
     mode: "0644"
   become: true
-  notify: restart alloy
+  notify: Restart alloy
 
 - name: Enable and start Alloy service
   ansible.builtin.systemd:

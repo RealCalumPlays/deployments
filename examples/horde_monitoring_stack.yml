@@ -31,13 +31,13 @@
 
   pre_tasks:
     - name: Push TLS cert for node_exporter
-      copy:
+      ansible.builtin.copy:
         src: "tls/{{ inventory_hostname }}.crt"
         dest: /etc/node_exporter/tls.crt
         mode: "0644"
 
     - name: Push TLS key for node_exporter
-      copy:
+      ansible.builtin.copy:
         src: "tls/{{ inventory_hostname }}.key"
         dest: /etc/node_exporter/tls.key
         mode: "0600"
@@ -100,30 +100,30 @@
     alertmanager_resolve_timeout: "5m"
     alertmanager_receivers:
       - name: "default"
-        # Configure your notification channel here. Uncomment ONE of:
-        #
-        # Slack:
-        # slack_configs:
-        #   - api_url: "{{ vault_alertmanager_slack_webhook }}"
-        #     channel: '#monitoring-alerts'
-        #     send_resolved: true
-        #     title: '{% raw %}[{{ .Status | toUpper }}] {{ .GroupLabels.alertname }}{% endraw %}'
-        #     text: >-
-        #       {% raw %}{{ range .Alerts }}{{ .Annotations.description }}
-        #       {{ end }}{% endraw %}
-        #
-        # Email:
-        # email_configs:
-        #   - to: 'oncall@example.com'
-        #     send_resolved: true
-        #
-        # Webhook (generic):
-        # webhook_configs:
-        #   - url: 'http://your-webhook-endpoint:8080/alerts'
-        #     send_resolved: true
+      # Configure your notification channel here. Uncomment ONE of:
+      #
+      # Slack:
+      # slack_configs:
+      #   - api_url: "{{ vault_alertmanager_slack_webhook }}"
+      #     channel: '#monitoring-alerts'
+      #     send_resolved: true
+      #     title: '{% raw %}[{{ .Status | toUpper }}] {{ .GroupLabels.alertname }}{% endraw %}'
+      #     text: >-
+      #       {% raw %}{{ range .Alerts }}{{ .Annotations.description }}
+      #       {{ end }}{% endraw %}
+      #
+      # Email:
+      # email_configs:
+      #   - to: 'oncall@example.com'
+      #     send_resolved: true
+      #
+      # Webhook (generic):
+      # webhook_configs:
+      #   - url: 'http://your-webhook-endpoint:8080/alerts'
+      #     send_resolved: true
       - name: "null"
-        # Silently drops alerts. Used for Watchdog during initial setup.
-        # In production, replace with a dead man's switch endpoint.
+    # Silently drops alerts. Used for Watchdog during initial setup.
+    # In production, replace with a dead man's switch endpoint.
     alertmanager_route:
       group_by: ["alertname", "job"]
       group_wait: 30s
@@ -211,17 +211,17 @@
         static_configs:
           - targets:
               - "localhost:4040"
-      # Uncomment if running postgres_exporter:
-      # - job_name: postgres
-      #   scheme: https
-      #   basic_auth:
-      #     username: prometheus
-      #     password: "{{ vault_postgres_exporter_password }}"
-      #   tls_config:
-      #     ca_file: /etc/prometheus/ca.crt
-      #   static_configs:
-      #     - targets:
-      #         - "localhost:9187"
+    # Uncomment if running postgres_exporter:
+    # - job_name: postgres
+    #   scheme: https
+    #   basic_auth:
+    #     username: prometheus
+    #     password: "{{ vault_postgres_exporter_password }}"
+    #   tls_config:
+    #     ca_file: /etc/prometheus/ca.crt
+    #   static_configs:
+    #     - targets:
+    #         - "localhost:9187"
 
     # -- Stats exporter --
     exporter_port: 9150
@@ -229,7 +229,7 @@
 
   pre_tasks:
     - name: Push CA certificate for Prometheus
-      copy:
+      ansible.builtin.copy:
         src: tls/ca.crt
         dest: /etc/prometheus/ca.crt
         mode: "0644"
@@ -242,25 +242,25 @@
 
   post_tasks:
     - name: Verify Mimir is ready
-      uri:
+      ansible.builtin.uri:
         url: "http://localhost:9009/ready"
-        return_content: yes
+        return_content: true
       register: mimir_health
       retries: 10
       delay: 5
       until: mimir_health.status == 200
 
     - name: Verify Alertmanager is ready
-      uri:
+      ansible.builtin.uri:
         url: "http://localhost:9093/-/ready"
-        return_content: yes
+        return_content: true
       register: alertmanager_health
       retries: 5
       delay: 3
       until: alertmanager_health.status == 200
 
     - name: Verify Grafana is running
-      uri:
+      ansible.builtin.uri:
         url: "http://localhost:3000/api/health"
       register: grafana_health
       retries: 5
@@ -268,7 +268,7 @@
       until: grafana_health.status == 200
 
     - name: Display monitoring stack status
-      debug:
+      ansible.builtin.debug:
         msg:
           - "Monitoring stack deployed successfully!"
           - "Mimir: http://127.0.0.1:9009 (local only; HAProxy for external)"

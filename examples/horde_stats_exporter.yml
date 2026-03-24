@@ -23,14 +23,14 @@
 
   post_tasks:
     - name: Verify exporter is running
-      uri:
+      ansible.builtin.uri:
         url: "http://localhost:{{ exporter_port }}/metrics"
-        return_content: yes
+        return_content: true
       register: metrics
       retries: 5
       delay: 5
       until: metrics.status == 200
 
     - name: Display exporter status
-      debug:
+      ansible.builtin.debug:
         msg: "AI Horde Stats Exporter is running on port {{ exporter_port }}"

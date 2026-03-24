@@ -3,7 +3,7 @@
 - name: Test horde_monitoring - Full stack
   hosts: testhost
   become: true
-  gather_facts: yes
+  gather_facts: true
 
   vars:
     monitoring_install_mimir: true
@@ -27,27 +27,27 @@
 
   post_tasks:
     - name: Read rendered Mimir config
-      slurp:
+      ansible.builtin.slurp:
         path: /etc/mimir/mimir.yaml
       register: mimir_config
 
     - name: Read rendered Mimir runtime overrides
-      slurp:
+      ansible.builtin.slurp:
         path: /etc/mimir/runtime-overrides.yaml
       register: mimir_runtime_overrides
 
     - name: Read rendered Grafana datasources
-      slurp:
+      ansible.builtin.slurp:
         path: /etc/grafana/provisioning/datasources/mimir.yml
       register: grafana_datasources
 
     - name: Read rendered Docker Compose
-      slurp:
+      ansible.builtin.slurp:
         path: /opt/mimir/docker-compose.yml
       register: compose_config
 
     - name: Assert multitenant monitoring config
-      assert:
+      ansible.builtin.assert:
         that:
           - "'multitenancy_enabled: true' in (mimir_config.content | b64decode)"
           - "'runtime-overrides.yaml' in (mimir_config.content | b64decode)"
@@ -64,7 +64,7 @@
           - "'ANONYMOUS_ORG_NAME' in (compose_config.content | b64decode)"
 
     - name: Assert S3 object storage config (MinIO)
-      assert:
+      ansible.builtin.assert:
         that:
           - "'backend: s3' in (mimir_config.content | b64decode)"
           - "'endpoint: minio:' in (mimir_config.content | b64decode)"
@@ -75,7 +75,7 @@
           - "'minio/health/live' in (compose_config.content | b64decode)"
 
     - name: Assert performance and caching config
-      assert:
+      ansible.builtin.assert:
         that:
           - "'activity_tracker' in (mimir_config.content | b64decode)"
           - "'chunks_cache' in (mimir_config.content | b64decode)"
@@ -87,12 +87,12 @@
           - "'memcached' in (compose_config.content | b64decode)"
 
     - name: Read rendered alerting rules
-      slurp:
+      ansible.builtin.slurp:
         path: /etc/prometheus/rules/monitoring-stack.rules
       register: alerting_rules
 
     - name: Assert alerting rules content
-      assert:
+      ansible.builtin.assert:
         that:
           - "'Watchdog' in (alerting_rules.content | b64decode)"
           - "'MimirDown' in (alerting_rules.content | b64decode)"
@@ -110,7 +110,7 @@
           - "'monitoring-stack-watchdog' in (alerting_rules.content | b64decode)"
 
     - name: Assert no floating or latest image tags in Compose
-      assert:
+      ansible.builtin.assert:
         that:
           - "'latest' not in (compose_config.content | b64decode)"
           - "'grafana/grafana:12.4.1' in (compose_config.content | b64decode)"
@@ -119,7 +119,7 @@
         fail_msg: "All container images must use immutable version tags (no 'latest', no minor-only floating)"
 
     - name: Assert log rotation is configured for all services
-      assert:
+      ansible.builtin.assert:
         that:
           - "'driver: local' in (compose_config.content | b64decode)"
           - "'max-size' in (compose_config.content | b64decode)"
@@ -127,34 +127,34 @@
         fail_msg: "All Compose services must have logging driver with rotation configured"
 
     - name: Read rendered systemd service
-      slurp:
+      ansible.builtin.slurp:
         path: /etc/systemd/system/mimir-monitoring.service
       register: systemd_service
 
     - name: Assert TimeoutStartSec is finite (not 0)
-      assert:
+      ansible.builtin.assert:
         that:
           - "'TimeoutStartSec=0' not in (systemd_service.content | b64decode)"
           - "'TimeoutStartSec=300' in (systemd_service.content | b64decode)"
         fail_msg: "TimeoutStartSec must be set to a finite value (300s) to prevent infinite boot hangs"
 
     - name: Stat Mimir config file permissions
-      stat:
+      ansible.builtin.stat:
         path: /etc/mimir/mimir.yaml
       register: _mimir_config_stat
 
     - name: Stat Docker Compose file permissions
-      stat:
+      ansible.builtin.stat:
         path: /opt/mimir/docker-compose.yml
       register: _compose_config_stat
 
     - name: Stat Mimir runtime overrides permissions
-      stat:
+      ansible.builtin.stat:
         path: /etc/mimir/runtime-overrides.yaml
       register: _runtime_overrides_stat
 
     - name: Assert secret-containing files are mode 0600 owned by root:root
-      assert:
+      ansible.builtin.assert:
         that:
           - _mimir_config_stat.stat.mode == '0600'
           - _mimir_config_stat.stat.pw_name == 'root'
@@ -168,22 +168,22 @@
         fail_msg: "Secret-containing files must be mode 0600, owned root:root"
 
     - name: Stat Mimir config directory
-      stat:
+      ansible.builtin.stat:
         path: /etc/mimir
       register: _mimir_dir_stat
 
     - name: Stat Mimir data directory
-      stat:
+      ansible.builtin.stat:
         path: /var/lib/mimir
       register: _mimir_data_stat
 
     - name: Stat MinIO data directory
-      stat:
+      ansible.builtin.stat:
         path: /var/lib/minio-data
       register: _minio_data_stat
 
     - name: Assert directories are owned by root:root
-      assert:
+      ansible.builtin.assert:
         that:
           - _mimir_dir_stat.stat.pw_name == 'root'
           - _mimir_dir_stat.stat.gr_name == 'root'
@@ -197,38 +197,38 @@
     # overwrites the config and creates a backup file.
 
     - name: Re-run role with changed mimir_log_level to trigger backup
-      include_role:
+      ansible.builtin.include_role:
         name: horde_monitoring
       vars:
         mimir_log_level: "info"
         monitoring_start_services: false
 
     - name: Find backup files for mimir.yaml
-      find:
+      ansible.builtin.find:
         paths: /etc/mimir
         patterns: "mimir.yaml.*~"
       register: _mimir_backups
 
     - name: Find backup files for docker-compose.yml
-      find:
+      ansible.builtin.find:
         paths: /opt/mimir
         patterns: "docker-compose.yml.*~"
       register: _compose_backups
 
     - name: Find backup files for runtime-overrides.yaml
-      find:
+      ansible.builtin.find:
         paths: /etc/mimir
         patterns: "runtime-overrides.yaml.*~"
       register: _overrides_backups
 
     - name: Assert config backups were created
-      assert:
+      ansible.builtin.assert:
         that:
           - _mimir_backups.matched > 0
         fail_msg: "Template tasks must create backup files before overwriting"
 
     - name: Stat critical output files
-      stat:
+      ansible.builtin.stat:
         path: "{{ item }}"
       loop:
         - /etc/mimir/mimir.yaml
@@ -240,7 +240,7 @@
       register: _critical_files
 
     - name: Assert all critical output files exist
-      assert:
+      ansible.builtin.assert:
         that:
           - item.stat.exists
         fail_msg: "Critical file missing: {{ item.item }}"
@@ -249,19 +249,19 @@
         label: "{{ item.item }}"
 
     - name: Stat HAProxy safe edit script
-      stat:
+      ansible.builtin.stat:
         path: /usr/local/bin/haproxy_safe_edit.sh
       register: _haproxy_script_stat
 
     - name: Assert HAProxy safe edit script is executable
-      assert:
+      ansible.builtin.assert:
         that:
           - _haproxy_script_stat.stat.exists
           - _haproxy_script_stat.stat.mode == '0755'
         fail_msg: "HAProxy safe edit script must exist and be mode 0755"
 
     - name: Assert systemd unit contains required directives
-      assert:
+      ansible.builtin.assert:
         that:
           - "'Requires=docker.service' in (systemd_service.content | b64decode)"
           - "'docker compose' in (systemd_service.content | b64decode)"
@@ -275,13 +275,13 @@
 - name: Test fail-fast rejects default passwords
   hosts: testhost
   become: true
-  gather_facts: no
+  gather_facts: false
 
   tasks:
     - name: Attempt role with default passwords and start_services=true
       block:
         - name: Run role with default credentials (should fail)
-          include_role:
+          ansible.builtin.include_role:
             name: horde_monitoring
           vars:
             monitoring_install_mimir: true
@@ -293,12 +293,12 @@
             grafana_admin_password: "changeme"
 
         - name: Fail if role did not reject default passwords
-          fail:
+          ansible.builtin.fail:
             msg: "Role should have failed with default passwords but did not"
 
       rescue:
         - name: Assert failure was specifically about default credentials
-          assert:
+          ansible.builtin.assert:
             that:
               - ansible_failed_result.msg is defined
               - >-
@@ -310,7 +310,7 @@
               {{ ansible_failed_result.msg | default('(no message)') }}
 
         - name: Confirm expected failure occurred
-          debug:
+          ansible.builtin.debug:
             msg: "PASS — Fail-fast correctly rejected default credentials"
 
 # ---------------------------------------------------------------------------
@@ -319,7 +319,7 @@
 - name: Test horde_monitoring - Loki + Tempo enabled
   hosts: testhost
   become: true
-  gather_facts: yes
+  gather_facts: true
 
   vars:
     monitoring_install_mimir: true
@@ -341,12 +341,12 @@
 
   post_tasks:
     - name: Read rendered Docker Compose (loki/tempo)
-      slurp:
+      ansible.builtin.slurp:
         path: /opt/mimir/docker-compose.yml
       register: compose_lt
 
     - name: Assert Loki service is present in Compose
-      assert:
+      ansible.builtin.assert:
         that:
           - "'loki:' in (compose_lt.content | b64decode)"
           - "'grafana/loki:3.4.2' in (compose_lt.content | b64decode)"
@@ -355,7 +355,7 @@
         fail_msg: "Docker Compose must contain a Loki service with pinned image tag"
 
     - name: Assert Tempo service is present in Compose
-      assert:
+      ansible.builtin.assert:
         that:
           - "'tempo:' in (compose_lt.content | b64decode)"
           - "'grafana/tempo:2.7.1' in (compose_lt.content | b64decode)"
@@ -366,30 +366,30 @@
         fail_msg: "Docker Compose must contain a Tempo service with pinned image tag"
 
     - name: Assert no :latest tags in Compose
-      assert:
+      ansible.builtin.assert:
         that:
           - "':latest' not in (compose_lt.content | b64decode)"
         fail_msg: "No :latest tags allowed in Docker Compose"
 
     - name: Stat Loki config file
-      stat:
+      ansible.builtin.stat:
         path: /etc/loki/loki.yaml
       register: _loki_config_stat
 
     - name: Assert Loki config exists with correct permissions
-      assert:
+      ansible.builtin.assert:
         that:
           - _loki_config_stat.stat.exists
           - _loki_config_stat.stat.mode == '0640'
         fail_msg: "Loki config must exist as 0640"
 
     - name: Read Loki config
-      slurp:
+      ansible.builtin.slurp:
         path: /etc/loki/loki.yaml
       register: loki_config
 
     - name: Assert Loki config content
-      assert:
+      ansible.builtin.assert:
         that:
           - "'auth_enabled: true' in (loki_config.content | b64decode)"
           - "'schema_config' in (loki_config.content | b64decode)"
@@ -398,24 +398,24 @@
           - "'retention_period' in (loki_config.content | b64decode)"
 
     - name: Stat Tempo config file
-      stat:
+      ansible.builtin.stat:
         path: /etc/tempo/tempo.yaml
       register: _tempo_config_stat
 
     - name: Assert Tempo config exists with correct permissions
-      assert:
+      ansible.builtin.assert:
         that:
           - _tempo_config_stat.stat.exists
           - _tempo_config_stat.stat.mode == '0640'
         fail_msg: "Tempo config must exist as 0640"
 
     - name: Read Tempo config
-      slurp:
+      ansible.builtin.slurp:
         path: /etc/tempo/tempo.yaml
       register: tempo_config
 
     - name: Assert Tempo config content
-      assert:
+      ansible.builtin.assert:
         that:
           - "'distributor' in (tempo_config.content | b64decode)"
           - "'otlp' in (tempo_config.content | b64decode)"
@@ -423,12 +423,12 @@
           - "'block_retention' in (tempo_config.content | b64decode)"
 
     - name: Read Grafana datasources
-      slurp:
+      ansible.builtin.slurp:
         path: /etc/grafana/provisioning/datasources/mimir.yml
       register: grafana_ds_lt
 
     - name: Assert Loki datasources are provisioned
-      assert:
+      ansible.builtin.assert:
         that:
           - "'loki-app' in (grafana_ds_lt.content | b64decode)"
           - "'loki-infra' in (grafana_ds_lt.content | b64decode)"
@@ -436,18 +436,18 @@
         fail_msg: "Grafana must have Loki datasources provisioned"
 
     - name: Assert Tempo datasource is provisioned
-      assert:
+      ansible.builtin.assert:
         that:
           - "'type: tempo' in (grafana_ds_lt.content | b64decode)"
         fail_msg: "Grafana must have Tempo datasource provisioned"
 
     - name: Read alerting rules
-      slurp:
+      ansible.builtin.slurp:
         path: /etc/prometheus/rules/monitoring-stack.rules
       register: alerting_rules_lt
 
     - name: Assert Loki alerting rules are present
-      assert:
+      ansible.builtin.assert:
         that:
           - "'LokiDown' in (alerting_rules_lt.content | b64decode)"
           - "'LokiRequestErrors' in (alerting_rules_lt.content | b64decode)"
@@ -456,7 +456,7 @@
         fail_msg: "Alerting rules must include Loki health alerts"
 
     - name: Assert Tempo alerting rules are present
-      assert:
+      ansible.builtin.assert:
         that:
           - "'TempoDown' in (alerting_rules_lt.content | b64decode)"
           - "'TempoRequestErrors' in (alerting_rules_lt.content | b64decode)"
@@ -465,7 +465,7 @@
         fail_msg: "Alerting rules must include Tempo health alerts"
 
     - name: Assert Pyroscope alerting rules are present
-      assert:
+      ansible.builtin.assert:
         that:
           - "'PyroscopeDown' in (alerting_rules_lt.content | b64decode)"
           - "'PyroscopeRequestErrors' in (alerting_rules_lt.content | b64decode)"
@@ -474,7 +474,7 @@
         fail_msg: "Alerting rules must include Pyroscope health alerts"
 
     - name: Assert Loki data directories exist
-      stat:
+      ansible.builtin.stat:
         path: "{{ item }}"
       loop:
         - /var/lib/loki
@@ -483,7 +483,7 @@
       register: _loki_dirs
 
     - name: Validate Loki directories
-      assert:
+      ansible.builtin.assert:
         that:
           - item.stat.exists
           - item.stat.isdir
@@ -492,7 +492,7 @@
         label: "{{ item.item }}"
 
     - name: Assert Tempo data directories exist
-      stat:
+      ansible.builtin.stat:
         path: "{{ item }}"
       loop:
         - /var/lib/tempo
@@ -501,7 +501,7 @@
       register: _tempo_dirs
 
     - name: Validate Tempo directories
-      assert:
+      ansible.builtin.assert:
         that:
           - item.stat.exists
           - item.stat.isdir
@@ -512,7 +512,7 @@
     # ── Pyroscope assertions ──────────────────────────────────────
 
     - name: Assert Pyroscope service is present in Compose
-      assert:
+      ansible.builtin.assert:
         that:
           - "'pyroscope:' in (compose_lt.content | b64decode)"
           - "'grafana/pyroscope:1.19.0' in (compose_lt.content | b64decode)"
@@ -522,24 +522,24 @@
         fail_msg: "Docker Compose must contain a Pyroscope service with pinned image tag and runtime overrides mount"
 
     - name: Stat Pyroscope config file
-      stat:
+      ansible.builtin.stat:
         path: /etc/pyroscope/pyroscope.yaml
       register: _pyroscope_config_stat
 
     - name: Assert Pyroscope config exists with correct permissions
-      assert:
+      ansible.builtin.assert:
         that:
           - _pyroscope_config_stat.stat.exists
           - _pyroscope_config_stat.stat.mode == '0640'
         fail_msg: "Pyroscope config must exist as 0640"
 
     - name: Read Pyroscope config
-      slurp:
+      ansible.builtin.slurp:
         path: /etc/pyroscope/pyroscope.yaml
       register: pyroscope_config
 
     - name: Assert Pyroscope config content
-      assert:
+      ansible.builtin.assert:
         that:
           - "'multitenancy_enabled: true' in (pyroscope_config.content | b64decode)"
           - "'pyroscope-data' in (pyroscope_config.content | b64decode)"
@@ -548,33 +548,33 @@
           - "'runtime-overrides.yaml' in (pyroscope_config.content | b64decode)"
 
     - name: Stat Pyroscope runtime overrides
-      stat:
+      ansible.builtin.stat:
         path: /etc/pyroscope/runtime-overrides.yaml
       register: _pyroscope_overrides_stat
 
     - name: Assert Pyroscope runtime overrides exist
-      assert:
+      ansible.builtin.assert:
         that:
           - _pyroscope_overrides_stat.stat.exists
           - _pyroscope_overrides_stat.stat.mode == '0640'
         fail_msg: "Pyroscope runtime overrides must exist as 0640"
 
     - name: Read Pyroscope runtime overrides
-      slurp:
+      ansible.builtin.slurp:
         path: /etc/pyroscope/runtime-overrides.yaml
       register: pyroscope_overrides
 
     - name: Assert Pyroscope per-tenant overrides
-      assert:
+      ansible.builtin.assert:
         that:
-          - "'ai-horde-app' in (pyroscope_overrides.content | b64decode)"
-          - "'infrastructure' in (pyroscope_overrides.content | b64decode)"
-          - "'ai-horde-public' in (pyroscope_overrides.content | b64decode)"
+          - "'app-metrics' in (pyroscope_overrides.content | b64decode)"
+          - "'infra-metrics' in (pyroscope_overrides.content | b64decode)"
+          - "'public-metrics' in (pyroscope_overrides.content | b64decode)"
           - "'compactor_blocks_retention_period' in (pyroscope_overrides.content | b64decode)"
         fail_msg: "Pyroscope must have per-tenant retention overrides"
 
     - name: Assert Pyroscope datasources are provisioned
-      assert:
+      ansible.builtin.assert:
         that:
           - "'pyroscope-app' in (grafana_ds_lt.content | b64decode)"
           - "'pyroscope-infra' in (grafana_ds_lt.content | b64decode)"
@@ -582,12 +582,12 @@
         fail_msg: "Grafana must have Pyroscope datasources provisioned"
 
     - name: Assert Pyroscope data directory exists
-      stat:
+      ansible.builtin.stat:
         path: /var/lib/pyroscope
       register: _pyroscope_data_dir
 
     - name: Validate Pyroscope data directory
-      assert:
+      ansible.builtin.assert:
         that:
           - _pyroscope_data_dir.stat.exists
           - _pyroscope_data_dir.stat.isdir
@@ -598,7 +598,7 @@
 - name: Test horde_monitoring - Loki + Tempo disabled (negative test)
   hosts: testhost
   become: true
-  gather_facts: yes
+  gather_facts: true
 
   vars:
     monitoring_install_mimir: true
@@ -616,24 +616,24 @@
 
   post_tasks:
     - name: Read Docker Compose (disabled loki/tempo)
-      slurp:
+      ansible.builtin.slurp:
         path: /opt/mimir/docker-compose.yml
       register: compose_disabled
 
     - name: Assert Loki and Tempo are NOT in Compose when disabled
-      assert:
+      ansible.builtin.assert:
         that:
           - "'grafana/loki' not in (compose_disabled.content | b64decode)"
           - "'grafana/tempo' not in (compose_disabled.content | b64decode)"
         fail_msg: "Loki/Tempo should not appear in Compose when disabled"
 
     - name: Read alerting rules (disabled)
-      slurp:
+      ansible.builtin.slurp:
         path: /etc/prometheus/rules/monitoring-stack.rules
       register: alerting_disabled
 
     - name: Assert Loki and Tempo alerts are NOT present when disabled
-      assert:
+      ansible.builtin.assert:
         that:
           - "'LokiDown' not in (alerting_disabled.content | b64decode)"
           - "'TempoDown' not in (alerting_disabled.content | b64decode)"

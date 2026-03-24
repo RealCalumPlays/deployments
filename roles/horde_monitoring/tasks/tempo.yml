@@ -3,7 +3,7 @@
 # Tempo runs as part of the monitoring Docker Compose stack
 
 - name: Create Tempo config directory
-  file:
+  ansible.builtin.file:
     path: "{{ tempo_config_dir }}"
     state: directory
     owner: root
@@ -12,7 +12,7 @@
   become: true
 
 - name: Create Tempo data directories
-  file:
+  ansible.builtin.file:
     path: "{{ item }}"
     state: directory
     owner: "10001"
@@ -28,12 +28,12 @@
     - "{{ tempo_data_dir }}/generator/traces"
 
 - name: Template Tempo configuration
-  template:
+  ansible.builtin.template:
     src: tempo.yaml.j2
     dest: "{{ tempo_config_dir }}/tempo.yaml"
     owner: root
     group: "10001"
     mode: "0640"
-    backup: yes
+    backup: true
   become: true
-  notify: restart monitoring stack
+  notify: Restart monitoring stack

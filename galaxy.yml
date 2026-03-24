@@ -16,3 +16,8 @@ tags:
 repository: "https://github.com/Haidra-Org/deployments"
 issues: "https://github.com/Haidra-Org/deployments/issues"
 description: Ansible collection for Haidra deployments
+build_ignore:
+  - local-deploy
+  - .venv
+  - .git
+  - tests

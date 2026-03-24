@@ -3,11 +3,11 @@
 # Installs ai-horde-stats-exporter from the horde-exporters monorepo via uv
 
 - name: Install system dependencies for Ansible modules
-  apt:
+  ansible.builtin.apt:
     name:
       - python3
     state: present
-    update_cache: yes
+    update_cache: true
   become: true
 
 - name: Download uv installer
@@ -28,22 +28,22 @@
   when: not ansible_check_mode
 
 - name: Ensure uv is on PATH system-wide
-  copy:
+  ansible.builtin.copy:
     content: 'export PATH="/root/.local/bin:$PATH"'
     dest: /etc/profile.d/uv.sh
     mode: "0644"
   become: true
 
 - name: Create exporter user
-  user:
+  ansible.builtin.user:
     name: "{{ exporter_user }}"
-    system: yes
+    system: true
     shell: /usr/sbin/nologin
-    createhome: no
+    createhome: false
   become: true
 
 - name: Create exporter directory
-  file:
+  ansible.builtin.file:
     path: "{{ exporter_install_dir }}"
     state: directory
     owner: "{{ exporter_user }}"
@@ -52,7 +52,7 @@
   become: true
 
 - name: Create log directory
-  file:
+  ansible.builtin.file:
     path: /var/log/horde-stats
     state: directory
     owner: "{{ exporter_user }}"
@@ -61,22 +61,22 @@
   become: true
 
 - name: Create virtual environment with uv
-  command: /root/.local/bin/uv venv {{ exporter_install_dir }}/venv --python 3.12 --managed-python
+  ansible.builtin.command: /root/.local/bin/uv venv {{ exporter_install_dir }}/venv --python 3.12 --managed-python
   args:
     creates: "{{ exporter_install_dir }}/venv"
   become: true
 
 - name: Set venv ownership
-  file:
+  ansible.builtin.file:
     path: "{{ exporter_install_dir }}/venv"
     state: directory
     owner: "{{ exporter_user }}"
     group: "{{ exporter_user }}"
-    recurse: yes
+    recurse: true
   become: true
 
 - name: Read installed exporter ref marker
-  slurp:
+  ansible.builtin.slurp:
     src: "{{ exporter_install_dir }}/.exporter_ref"
   register: _exporter_ref_marker
   failed_when: false
@@ -84,22 +84,26 @@
   become: true
 
 - name: Compute installed exporter ref
-  set_fact:
-    _exporter_ref_current: "{{ (_exporter_ref_marker.content | default('') | b64decode | trim) if (_exporter_ref_marker is defined and _exporter_ref_marker.content is defined) else '' }}"
+  ansible.builtin.set_fact:
+    _exporter_ref_current: >-
+      {{ (_exporter_ref_marker.content | default('') | b64decode | trim)
+      if (_exporter_ref_marker is defined and _exporter_ref_marker.content is defined)
+      else '' }}
 
 - name: Install ai-horde-stats-exporter from GitHub
-  command: >
+  ansible.builtin.command: >
     /root/.local/bin/uv pip install
     --python {{ exporter_install_dir }}/venv/bin/python
     "ai-horde-stats-exporter @ git+{{ exporter_repo_url }}@{{ exporter_repo_ref }}#subdirectory=packages/ai-horde-stats-exporter"
   become: true
+  changed_when: true
   when:
     - not ansible_check_mode
     - _exporter_ref_current != exporter_repo_ref
-  notify: restart horde-exporter
+  notify: Restart horde-exporter
 
 - name: Record installed exporter ref
-  copy:
+  ansible.builtin.copy:
     dest: "{{ exporter_install_dir }}/.exporter_ref"
     content: "{{ exporter_repo_ref }}\n"
     owner: "{{ exporter_user }}"
@@ -111,17 +115,17 @@
     - _exporter_ref_current != exporter_repo_ref
 
 - name: Template exporter configuration
-  template:
+  ansible.builtin.template:
     src: exporter_config.yaml.j2
     dest: "{{ exporter_install_dir }}/exporter_config.yaml"
     owner: "{{ exporter_user }}"
     group: "{{ exporter_user }}"
     mode: "0644"
   become: true
-  notify: restart horde-exporter
+  notify: Restart horde-exporter
 
 - name: Install systemd service files
-  template:
+  ansible.builtin.template:
     src: "{{ item }}.j2"
     dest: "/etc/systemd/system/{{ item }}"
     mode: "0644"
@@ -130,28 +134,28 @@
     - horde-exporter.service
     - horde-downsample.service
     - horde-downsample.timer
-  notify: reload systemd
+  notify: Reload systemd
 
 - name: Configure logrotate
-  template:
+  ansible.builtin.template:
     src: logrotate-horde-stats.j2
     dest: /etc/logrotate.d/horde-stats
     mode: "0644"
   become: true
 
 - name: Enable and start horde-exporter service
-  systemd:
+  ansible.builtin.systemd:
     name: horde-exporter
-    enabled: yes
+    enabled: true
     state: started
-    daemon_reload: yes
+    daemon_reload: true
   become: true
 
 - name: Enable and start horde-downsample timer
-  systemd:
+  ansible.builtin.systemd:
     name: horde-downsample.timer
-    enabled: yes
+    enabled: true
     state: started
-    daemon_reload: yes
+    daemon_reload: true
   become: true
   when: exporter_enable_downsampling
