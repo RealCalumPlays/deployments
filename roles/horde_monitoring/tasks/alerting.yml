@@ -7,7 +7,7 @@
 # See Plan 011 (docs/plans/011-alertmanager.md) for architecture details.
 
 - name: Ensure Prometheus rules directory exists
-  file:
+  ansible.builtin.file:
     path: "{{ monitoring_alerting_rules_dir }}"
     state: directory
     owner: root
@@ -16,11 +16,11 @@
   become: true
 
 - name: Template monitoring stack alerting rules
-  template:
+  ansible.builtin.template:
     src: alerting-rules.yml.j2
     dest: "{{ monitoring_alerting_rules_dir }}/{{ monitoring_alerting_rules_file }}"
     owner: root
     group: root
     mode: "0644"
   become: true
-  notify: reload prometheus
+  notify: Reload prometheus

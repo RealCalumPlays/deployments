@@ -5,7 +5,7 @@
 - name: Test horde_monitoring - retention, backup, overrides, skip paths
   hosts: testhost
   become: true
-  gather_facts: yes
+  gather_facts: true
 
   vars:
     monitoring_install_mimir: true
@@ -38,18 +38,18 @@
 
   post_tasks:
     - name: Read rendered Mimir runtime overrides
-      slurp:
+      ansible.builtin.slurp:
         path: /etc/mimir/runtime-overrides.yaml
       register: mimir_runtime_overrides
 
     - name: Assert custom retention values
-      assert:
+      ansible.builtin.assert:
         that:
           - "'compactor_blocks_retention_period: 0' in (mimir_runtime_overrides.content | b64decode)"
           - "'compactor_blocks_retention_period: 7d' in (mimir_runtime_overrides.content | b64decode)"
 
     - name: Assert extra tenant overrides are merged
-      assert:
+      ansible.builtin.assert:
         that:
           - "'custom-tenant' in (mimir_runtime_overrides.content | b64decode)"
           - "'180d' in (mimir_runtime_overrides.content | b64decode)"
@@ -58,12 +58,12 @@
     # ── Alerting rules skip path ──────────────────────────────────
 
     - name: Check alerting rules file is absent (disabled)
-      stat:
+      ansible.builtin.stat:
         path: /etc/prometheus/rules/monitoring-stack.rules
       register: _rules_file
 
     - name: Assert alerting rules were NOT rendered
-      assert:
+      ansible.builtin.assert:
         that:
           - not _rules_file.stat.exists
         fail_msg: "Alerting rules should be absent when monitoring_install_alerting_rules=false"
@@ -71,33 +71,33 @@
     # ── Backup service/timer template rendering ───────────────────
 
     - name: Check backup systemd service was rendered
-      stat:
+      ansible.builtin.stat:
         path: /etc/systemd/system/mimir-backup.service
       register: _backup_service
 
     - name: Check backup systemd timer was rendered
-      stat:
+      ansible.builtin.stat:
         path: /etc/systemd/system/mimir-backup.timer
       register: _backup_timer
 
     - name: Assert backup units were rendered
-      assert:
+      ansible.builtin.assert:
         that:
           - _backup_service.stat.exists
           - _backup_timer.stat.exists
 
     - name: Read backup service content
-      slurp:
+      ansible.builtin.slurp:
         path: /etc/systemd/system/mimir-backup.service
       register: backup_service_content
 
     - name: Read backup timer content
-      slurp:
+      ansible.builtin.slurp:
         path: /etc/systemd/system/mimir-backup.timer
       register: backup_timer_content
 
     - name: Assert backup service content
-      assert:
+      ansible.builtin.assert:
         that:
           - "'mc mirror' in (backup_service_content.content | b64decode)"
           - "'mimir-blocks' in (backup_service_content.content | b64decode)"
@@ -111,12 +111,12 @@
           - "'s3.example.com' not in (backup_service_content.content | b64decode)"
 
     - name: Check backup env file was rendered
-      stat:
+      ansible.builtin.stat:
         path: /etc/mimir/mimir-backup.env
       register: _backup_env
 
     - name: Assert backup env file exists and is restricted
-      assert:
+      ansible.builtin.assert:
         that:
           - _backup_env.stat.exists
           - _backup_env.stat.mode == '0600'
@@ -124,19 +124,19 @@
           - _backup_env.stat.gr_name == 'root'
 
     - name: Read backup env file content
-      slurp:
+      ansible.builtin.slurp:
         path: /etc/mimir/mimir-backup.env
       register: backup_env_content
 
     - name: Assert backup env file contains credentials
-      assert:
+      ansible.builtin.assert:
         that:
           - "'test-access-key' in (backup_env_content.content | b64decode)"
           - "'test-secret-key' in (backup_env_content.content | b64decode)"
           - "'s3.example.com' in (backup_env_content.content | b64decode)"
 
     - name: Assert backup timer content
-      assert:
+      ansible.builtin.assert:
         that:
           - "'OnCalendar' in (backup_timer_content.content | b64decode)"
           - "'Persistent=true' in (backup_timer_content.content | b64decode)"
@@ -144,7 +144,7 @@
     # Default is append-only (no --remove)
 
     - name: Assert backup service uses append-only mode by default
-      assert:
+      ansible.builtin.assert:
         that:
           - "'--remove' not in (backup_service_content.content | b64decode)"
         fail_msg: "Backup should default to append-only (no --remove)"
@@ -152,41 +152,41 @@
     # ── Grafana anonymous disabled path ───────────────────────────
 
     - name: Read Grafana datasources
-      slurp:
+      ansible.builtin.slurp:
         path: /etc/grafana/provisioning/datasources/mimir.yml
       register: grafana_ds
 
     - name: Assert no public org datasource when anonymous disabled
-      assert:
+      ansible.builtin.assert:
         that:
           - "'orgId: 2' not in (grafana_ds.content | b64decode)"
           - "'mimir-public' not in (grafana_ds.content | b64decode)"
 
     - name: Read rendered Docker Compose
-      slurp:
+      ansible.builtin.slurp:
         path: /opt/mimir/docker-compose.yml
       register: compose_config
 
     - name: Assert anonymous auth is disabled in Grafana
-      assert:
+      ansible.builtin.assert:
         that:
           - "'ANONYMOUS_ENABLED=false' in (compose_config.content | b64decode)"
 
     # ── Pyroscope absent when disabled ────────────────────────────
 
     - name: Assert Pyroscope is absent when not enabled
-      assert:
+      ansible.builtin.assert:
         that:
           - "'pyroscope' not in (compose_config.content | b64decode)"
         fail_msg: "Pyroscope should not appear in Compose when monitoring_install_pyroscope is false"
 
     - name: Stat Docker Compose file permissions
-      stat:
+      ansible.builtin.stat:
         path: /opt/mimir/docker-compose.yml
       register: _compose_config_stat
 
     - name: Assert secret-containing files are mode 0600 owned by root:root
-      assert:
+      ansible.builtin.assert:
         that:
           - _compose_config_stat.stat.mode == '0600'
           - _compose_config_stat.stat.pw_name == 'root'

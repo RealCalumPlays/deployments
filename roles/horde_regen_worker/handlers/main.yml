@@ -1,13 +1,14 @@
 ---
 - name: Restart AI Worker service
-  systemd:
-    state: restart
-    daemon_reload: yes
+  ansible.builtin.systemd:
+    state: restarted
+    daemon_reload: true
     name: "{{ worker_service_name }}"
-    enabled: True
+    enabled: true
     scope: user
   environment:
     XDG_RUNTIME_DIR: "/run/user/{{ getent_passwd[worker_username].1 }}"
+  become: true
   become_user: "{{ worker_username }}"
   when: not service_started.changed
   tags:

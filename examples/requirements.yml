@@ -1,6 +1,6 @@
 ---
 roles:
-  - geerlingguy.swap
+  - name: geerlingguy.swap
 
 collections:
   - name: prometheus.prometheus

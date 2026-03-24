@@ -8,13 +8,13 @@
 #   {{ grafana_dashboard_dir }}/infra/       -> infra dashboards for Org 1 (uid: mimir-infra)
 
 - name: Install git (needed for dashboard checkout)
-  apt:
+  ansible.builtin.apt:
     name: git
     state: present
   become: true
 
 - name: Create dashboard subdirectories
-  file:
+  ansible.builtin.file:
     path: "{{ grafana_dashboard_dir }}/{{ item }}"
     state: directory
     owner: "472"
@@ -27,17 +27,17 @@
     - infra
 
 - name: Clone horde-exporters repository (shallow)
-  git:
+  ansible.builtin.git:
     repo: "{{ grafana_dashboards_repo_url }}"
     dest: /tmp/horde-exporters-dashboards
     version: "{{ grafana_dashboards_repo_ref }}"
     depth: 1
-    force: yes
+    force: true
   become: true
   register: _dashboards_clone
 
 - name: Verify expected dashboard directories exist after clone
-  stat:
+  ansible.builtin.stat:
     path: "{{ item }}"
   loop:
     - /tmp/horde-exporters-dashboards/packages/ai-horde-stats-exporter/src/ai_horde_stats_exporter/dashboards
@@ -46,7 +46,7 @@
   become: true
 
 - name: Fail if dashboard directories are missing (repo structure changed?)
-  fail:
+  ansible.builtin.fail:
     msg: >-
       Expected dashboard directory {{ item.item }} not found after cloning
       {{ grafana_dashboards_repo_url }} at ref {{ grafana_dashboards_repo_ref }}.
@@ -58,27 +58,27 @@
     label: "{{ item.item }}"
 
 - name: Find app dashboard JSON files
-  find:
+  ansible.builtin.find:
     paths: /tmp/horde-exporters-dashboards/packages/ai-horde-stats-exporter/src/ai_horde_stats_exporter/dashboards
     patterns: "*.json"
   register: _app_dashboard_files
   become: true
 
 - name: Find infra dashboard JSON files
-  find:
+  ansible.builtin.find:
     paths: /tmp/horde-exporters-dashboards/dashboards
     patterns: "*.json"
-    recurse: yes
+    recurse: true
   register: _infra_dashboard_files
   become: true
 
 # --- Copy dashboards into their target directories -----------------------
 
 - name: Copy app dashboards for Org 1 (admin)
-  copy:
+  ansible.builtin.copy:
     src: "{{ item.path }}"
     dest: "{{ grafana_dashboard_dir }}/app/{{ item.path | basename }}"
-    remote_src: yes
+    remote_src: true
     owner: "472"
     group: "472"
     mode: "0644"
@@ -86,13 +86,13 @@
   loop: "{{ _app_dashboard_files.files }}"
   loop_control:
     label: "{{ item.path | basename }}"
-  notify: restart monitoring stack
+  notify: Restart monitoring stack
 
 - name: Copy app dashboards for Org 2 (public)
-  copy:
+  ansible.builtin.copy:
     src: "{{ item.path }}"
     dest: "{{ grafana_dashboard_dir }}/app-public/{{ item.path | basename }}"
-    remote_src: yes
+    remote_src: true
     owner: "472"
     group: "472"
     mode: "0644"
@@ -100,13 +100,13 @@
   loop: "{{ _app_dashboard_files.files }}"
   loop_control:
     label: "{{ item.path | basename }}"
-  notify: restart monitoring stack
+  notify: Restart monitoring stack
 
 - name: Copy infra dashboards for Org 1 (admin)
-  copy:
+  ansible.builtin.copy:
     src: "{{ item.path }}"
     dest: "{{ grafana_dashboard_dir }}/infra/{{ item.path | basename }}"
-    remote_src: yes
+    remote_src: true
     owner: "472"
     group: "472"
     mode: "0644"
@@ -114,7 +114,7 @@
   loop: "{{ _infra_dashboard_files.files }}"
   loop_control:
     label: "{{ item.path | basename }}"
-  notify: restart monitoring stack
+  notify: Restart monitoring stack
 
 # --- Patch datasource UIDs in each set of dashboards --------------------
 # The upstream JSON files may reference arbitrary datasource UIDs.  We
@@ -192,7 +192,7 @@
   changed_when: false
 
 - name: Clean up cloned repository
-  file:
+  ansible.builtin.file:
     path: /tmp/horde-exporters-dashboards
     state: absent
   become: true

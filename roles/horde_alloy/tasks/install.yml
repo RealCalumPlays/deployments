@@ -37,7 +37,7 @@
     state: present
     update_cache: true
   become: true
-  notify: restart alloy
+  notify: Restart alloy
   when: ansible_os_family == "Debian"
 
 - name: Add Grafana RPM repository
@@ -56,5 +56,5 @@
     name: "alloy-{{ alloy_version }}"
     state: present
   become: true
-  notify: restart alloy
+  notify: Restart alloy
   when: ansible_os_family == "RedHat"

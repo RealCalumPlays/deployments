@@ -66,11 +66,9 @@ alloy_scrape_interval: "15s"
 # Merged with auto-detected instance label (hostname).
 # Example: { "environment": "production", "region": "us-east-1" }
 alloy_external_labels: {}
-
 # Extra Prometheus scrape targets on the local host.
 # Each entry: { job: "name", address: "host:port", metrics_path: "/metrics" }
 alloy_extra_scrape_targets: []
-
 # ---------------------------------------------------------------------------
 # Log collection
 # ---------------------------------------------------------------------------
@@ -84,13 +82,11 @@ alloy_journal_max_age: "24h"
 # Collect from specific log files (glob patterns).
 # Example: ["/var/log/app/*.log", "/var/log/syslog"]
 alloy_collect_log_files: []
-
 # Collect Docker container logs (requires Docker on the host)
 alloy_collect_docker_logs: false
 
 # Static labels added to all log streams from this host.
 alloy_log_labels: {}
-
 # ---------------------------------------------------------------------------
 # Trace forwarding (OTLP receiver for local app instrumentation)
 # ---------------------------------------------------------------------------

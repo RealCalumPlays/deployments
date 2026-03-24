@@ -53,11 +53,13 @@ start_container() {
   log "Waiting for systemd to initialise..."
   local retries=30
   while [ $retries -gt 0 ]; do
-    if docker exec "$CONTAINER_NAME" systemctl is-system-running --wait 2>/dev/null | grep -qE "running|degraded"; then
+    local state
+    state="$(docker exec "$CONTAINER_NAME" systemctl is-system-running 2>/dev/null || true)"
+    if echo "$state" | grep -qE "running|degraded"; then
       break
     fi
     retries=$((retries - 1))
-    sleep 1
+    sleep 2
   done
 
   if [ $retries -eq 0 ]; then

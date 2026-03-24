@@ -1,6 +1,7 @@
-- name: install dependencies
-  apt:
-    state: latest
+---
+- name: Install dependencies
+  ansible.builtin.apt:
+    state: present
     update_cache: true
     pkg:
       - certbot
@@ -11,23 +12,24 @@
     - packages
 
 - name: Ensure haproxy config directory exists
-  file:
+  ansible.builtin.file:
     path: /etc/haproxy/cert
     owner: root
     group: root
     state: directory
+    mode: "0755"
   tags:
     - haproxy
 
 - name: Generate an OpenSSL private key with the default values (4096 bits, RSA)
-  openssl_privatekey:
+  community.crypto.openssl_privatekey:
     path: /etc/haproxy/cert/{{ artbot_domain }}.key
   when: self_signed_cert
   tags:
     - haproxy
 
 - name: Generate a Self Signed OpenSSL certificate
-  openssl_certificate:
+  community.crypto.x509_certificate:
     path: /etc/haproxy/cert/{{ artbot_domain }}.crt
     privatekey_path: /etc/haproxy/cert/{{ artbot_domain }}.key
     provider: selfsigned
@@ -36,48 +38,51 @@
     - haproxy
 
 - name: Create merged certificate
-  shell: cat /etc/haproxy/cert/{{ artbot_domain }}.key /etc/haproxy/cert/{{ artbot_domain }}.crt > /etc/haproxy/cert/{{ artbot_domain }}.pem
+  ansible.builtin.shell: >
+    cat /etc/haproxy/cert/{{ artbot_domain }}.key
+    /etc/haproxy/cert/{{ artbot_domain }}.crt
+    > /etc/haproxy/cert/{{ artbot_domain }}.pem
+  changed_when: true
   when: self_signed_cert
   tags:
     - haproxy
 
 - name: Ensure certbot is configured for the domain {{ artbot_domain }}
-  command: >
-    certbot certonly 
-    --domains {{ artbot_domain }},{{ other_domains }} 
-    --keep-until-expiring 
-    --agree-tos 
-    --standalone 
-    --http-01-port 60001 
-    --email {{ email }} 
-    --standalone 
-    -n --expand
+  ansible.builtin.command: >
+    certbot certonly
+    --domains {{ artbot_domain }},{{ other_domains }}
+    --keep-until-expiring --agree-tos --standalone
+    --http-01-port 60001 --email {{ email }}
+    --standalone -n --expand
+  changed_when: true
   tags:
     - cert
     - haproxy
   when: not self_signed_cert
 
 - name: Merge certbot certificates for {{ artbot_domain }}
-  shell: cat /etc/letsencrypt/live/{{ artbot_domain }}/privkey.pem /etc/letsencrypt/live/{{ artbot_domain }}/fullchain.pem > /etc/haproxy/cert/{{ artbot_domain }}.pem
+  ansible.builtin.shell: cat /etc/letsencrypt/live/{{ artbot_domain }}/privkey.pem /etc/letsencrypt/live/{{ artbot_domain }}/fullchain.pem >
+    /etc/haproxy/cert/{{ artbot_domain }}.pem
+  changed_when: true
   tags:
     - cert
     - haproxy
   when: not self_signed_cert
 
 - name: Ensure Haproxy Configuration
-  template:
+  ansible.builtin.template:
     src: "{{ haproxy_cfg_template }}"
     dest: /etc/haproxy/haproxy.cfg
     owner: root
     group: root
-    mode: 0644
+    mode: "0644"
     validate: /usr/sbin/haproxy -f %s -c
-  notify: reload haproxy
+  notify: Reload haproxy
   tags:
     - haproxy
 
 - name: Ensure certificate renew script exists
-  template:
+  ansible.builtin.template:
     src: certbot_renew.sh.j2
     dest: /root/certbot_renew.sh
     owner: root
@@ -86,7 +91,7 @@
   tags: haproxy
 
 - name: Add certificate renewal on cron
-  cron:
+  ansible.builtin.cron:
     user: root
     name: Renew Horde Certificate
     special_time: daily

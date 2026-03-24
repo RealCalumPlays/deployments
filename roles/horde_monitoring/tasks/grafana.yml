@@ -3,7 +3,7 @@
 # Grafana runs as part of the Mimir Docker Compose stack
 
 - name: Template Grafana datasource provisioning
-  template:
+  ansible.builtin.template:
     src: grafana-datasources.yml.j2
     dest: "{{ grafana_provisioning_dir }}/datasources/mimir.yml"
     owner: "472"
@@ -13,21 +13,21 @@
     # read the file. Consistent with Plan 003's posture for secret files.
     mode: "0600"
   become: true
-  notify: restart monitoring stack
+  notify: Restart monitoring stack
 
 - name: Template Grafana dashboard provider
-  template:
+  ansible.builtin.template:
     src: grafana-dashboards.yml.j2
     dest: "{{ grafana_provisioning_dir }}/dashboards/default.yml"
     owner: "472"
     group: "472"
     mode: "0600"
   become: true
-  notify: restart monitoring stack
+  notify: Restart monitoring stack
 
 # --- Public org creation (requires running Grafana) ---
 - name: Wait for Grafana to be healthy
-  uri:
+  ansible.builtin.uri:
     url: "http://127.0.0.1:{{ grafana_port }}/api/health"
     method: GET
     status_code: 200
@@ -40,7 +40,7 @@
     - monitoring_start_services | bool
 
 - name: Create public Grafana organization
-  uri:
+  ansible.builtin.uri:
     url: "http://127.0.0.1:{{ grafana_port }}/api/orgs"
     method: POST
     user: "{{ grafana_admin_user }}"

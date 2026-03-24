@@ -3,7 +3,7 @@
 # Prometheus scrapes local exporters and remote-writes to Mimir for long-term storage
 
 - name: Build default scrape configs
-  set_fact:
+  ansible.builtin.set_fact:
     _monitoring_scrape_configs:
       - job_name: "prometheus"
         static_configs:
@@ -24,12 +24,12 @@
               - "localhost:9300"
 
 - name: Append extra scrape configs
-  set_fact:
+  ansible.builtin.set_fact:
     _monitoring_scrape_configs: "{{ _monitoring_scrape_configs + monitoring_extra_scrape_configs }}"
   when: monitoring_extra_scrape_configs | length > 0
 
 - name: Deploy Prometheus via community role
-  include_role:
+  ansible.builtin.include_role:
     name: prometheus.prometheus.prometheus
   vars:
     prometheus_web_listen_address: "127.0.0.1:{{ prometheus_port }}"

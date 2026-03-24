@@ -97,7 +97,6 @@ monitoring_public_max_fetched_series: 50000
 
 # Additional runtime override entries keyed by tenant ID.
 mimir_extra_tenant_overrides: {}
-
 # Mimir performance tuning
 mimir_grpc_max_msg_size: 104857600
 mimir_max_global_series_per_user: 500000
@@ -207,7 +206,6 @@ loki_retention_period: "2160h"
 #     ai-horde-app:
 #       retention_period: "8760h"
 loki_tenant_overrides: {}
-
 # Ingestion rate limits (per-tenant defaults)
 loki_ingestion_rate_mb: 10
 loki_ingestion_burst_size_mb: 20
@@ -296,7 +294,6 @@ pyroscope_public_retention: "90d"
 
 # Additional per-tenant override entries (dict). Merged into runtime-overrides.yaml.
 pyroscope_extra_tenant_overrides: {}
-
 # Self-profiling: Pyroscope profiles itself for debugging/monitoring
 pyroscope_self_profiling: true
 

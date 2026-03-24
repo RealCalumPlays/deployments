@@ -5,41 +5,41 @@
 # using the prometheus.prometheus.prometheus community role.
 
 - name: Deploy Mimir + Grafana monitoring stack
-  include_tasks: mimir.yml
+  ansible.builtin.include_tasks: mimir.yml
   when: monitoring_install_mimir | bool
 
 - name: Deploy Loki log aggregation backend
-  include_tasks: loki.yml
+  ansible.builtin.include_tasks: loki.yml
   when: monitoring_install_loki | bool
 
 - name: Deploy Tempo distributed tracing backend
-  include_tasks: tempo.yml
+  ansible.builtin.include_tasks: tempo.yml
   when: monitoring_install_tempo | bool
 
 - name: Deploy Pyroscope continuous profiling backend
-  include_tasks: pyroscope.yml
+  ansible.builtin.include_tasks: pyroscope.yml
   when: monitoring_install_pyroscope | bool
 
 - name: Configure Grafana provisioning
-  include_tasks: grafana.yml
+  ansible.builtin.include_tasks: grafana.yml
   when:
     - monitoring_install_mimir | bool
     - monitoring_install_grafana | bool
 
 - name: Provision Grafana dashboards from horde-exporters
-  include_tasks: dashboards.yml
+  ansible.builtin.include_tasks: dashboards.yml
   when:
     - monitoring_install_grafana | bool
     - grafana_provision_dashboards | bool
 
 - name: Deploy monitoring stack alerting rules
-  include_tasks: alerting.yml
+  ansible.builtin.include_tasks: alerting.yml
   when: monitoring_install_alerting_rules | bool
 
 - name: Configure HAProxy for monitoring
-  include_tasks: haproxy.yml
+  ansible.builtin.include_tasks: haproxy.yml
   when: monitoring_configure_haproxy | bool
 
 - name: Configure firewall rules
-  include_tasks: firewall.yml
+  ansible.builtin.include_tasks: firewall.yml
   when: monitoring_configure_firewall | bool
