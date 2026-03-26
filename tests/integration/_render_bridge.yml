@@ -1,0 +1,58 @@
+---
+# Helper playbook: renders bridgeData.yaml for the integration worker.
+# Called by local_deploy.sh — not intended to be run standalone.
+# All variables are passed via -e flags from the shell script.
+
+- name: Render worker bridgeData.yaml for integration
+  hosts: localhost
+  connection: local
+  become: true
+  gather_facts: false
+
+  # Defaults for variables that bridgeData.yaml.j2 requires but that
+  # are not critical for integration testing.  The shell script
+  # overrides the important ones via -e.
+  vars:
+    priority_usernames: []
+    queue_size: 1
+    max_batch: 1
+    safety_on_gpu: false
+    require_upfront_kudos: false
+    blacklist: []
+    censor_nsfw: false
+    censorlist: []
+    allow_img2img: true
+    allow_painting: true
+    allow_unsafe_ip: true
+    allow_post_processing: true
+    allow_controlnet: false
+    allow_sdxl_controlnet: false
+    allow_lora: false
+    max_lora_cache_size: 10
+    dynamic_models: false
+    number_of_dynamic_models: 0
+    max_models_to_download: 10
+    stats_output_frequency: 30
+    moderate_performance_mode: false
+    high_performance_mode: false
+    exit_on_unhandled_faults: true
+    scribe_name: "integration-scribe"
+    kai_url: "http://localhost:5000"
+    max_length: 80
+    max_context_length: 1024
+    branded_model: true
+    alchemist_name: "integration-alchemist"
+    forms:
+      - "caption"
+    models_dir: "models"
+    worker_username: "root"
+    amd_gpu: false
+    worker_environment: ""
+    worker_service_name: "ai_horde_worker"
+
+  tasks:
+    - name: Template bridgeData.yaml
+      ansible.builtin.template:
+        src: "../../roles/horde_regen_worker/templates/bridgeData.yaml.j2"
+        dest: "{{ worker_runtime_dir }}/bridgeData.yaml"
+        mode: "0600"

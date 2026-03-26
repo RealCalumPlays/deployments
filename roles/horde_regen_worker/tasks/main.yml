@@ -122,7 +122,8 @@
     - debug
 
 - name: Ensure models are downloaded for the first time
-  ansible.builtin.shell: /home/{{ worker_username }}/{{ worker_clone_dir }}/runtime-rocm.sh python -s /home/{{ worker_username }}/{{ worker_clone_dir
+  ansible.builtin.shell:
+    /home/{{ worker_username }}/{{ worker_clone_dir }}/runtime-rocm.sh python -s /home/{{ worker_username }}/{{ worker_clone_dir
     }}/download_models.py
   become: true
   become_user: "{{ worker_username }}"
@@ -138,7 +139,8 @@
     - initialize
 
 - name: Ensure models are downloaded for the first time
-  ansible.builtin.shell: /home/{{ worker_username }}/{{ worker_clone_dir }}/runtime.sh python -s /home/{{ worker_username }}/{{ worker_clone_dir
+  ansible.builtin.shell:
+    /home/{{ worker_username }}/{{ worker_clone_dir }}/runtime.sh python -s /home/{{ worker_username }}/{{ worker_clone_dir
     }}/download_models.py
   become: true
   become_user: "{{ worker_username }}"

@@ -1,0 +1,25 @@
+---
+# Local deployment playbook — renders AiHordeFrontpage configs
+# into local-deploy/frontpage/ for manual validation via Docker Compose.
+#
+# Driven by tests/frontpage/local_deploy.sh — do not run directly.
+# Applies the aihorde_frontpage role against localhost with
+# aihorde_frontpage_start_services=false so only configs are rendered.
+
+- name: Render AiHordeFrontpage local deployment
+  hosts: localhost
+  connection: local
+  become: true
+  gather_facts: true
+
+  vars:
+    aihorde_frontpage_start_services: false
+    aihorde_frontpage_base_dir: "{{ playbook_dir }}/../../local-deploy/frontpage"
+    aihorde_frontpage_build_config: local
+    aihorde_frontpage_listen: "0.0.0.0"
+    aihorde_frontpage_port: 8006
+    aihorde_frontpage_repo: "https://github.com/Haidra-Org/AiHordeFrontpage.git"
+    aihorde_frontpage_repo_version: "master"
+
+  roles:
+    - aihorde_frontpage

@@ -1,0 +1,61 @@
+---
+# Full-stack rendering playbook — renders configs for all services
+# that participate in the complete local Horde stack.
+#
+# Driven by tests/full_stack/local_deploy.sh — do not run directly.
+# Applies both the ai_horde and aihorde_frontpage roles against
+# localhost with start_services=false so only configs are rendered.
+#
+# The HAProxy config is a static file (local-deploy/haproxy/haproxy.cfg)
+# and does not need to be rendered here.
+
+- name: Render complete Horde stack configs (local deploy)
+  hosts: localhost
+  connection: local
+  become: true
+  gather_facts: true
+
+  vars:
+    ai_horde_base_dir: "{{ playbook_dir }}/../../local-deploy/ai-horde"
+    ai_horde_data_dir: "{{ playbook_dir }}/../../local-deploy/ai-horde/data"
+    aihorde_frontpage_base_dir: "{{ playbook_dir }}/../../local-deploy/frontpage"
+
+    ai_horde_start_services: false
+    ai_horde_listen: "127.0.0.1"
+    ai_horde_port: 7001
+    ai_horde_postgres_password: "localdev-postgres"
+    ai_horde_secret_key: "localdev-secret-key"
+    ai_horde_admins: ["test_user#1"]
+    ai_horde_repo: "https://github.com/Haidra-Org/AI-Horde.git"
+    ai_horde_repo_version: "main"
+
+    aihorde_frontpage_start_services: false
+    aihorde_frontpage_build_config: local
+    aihorde_frontpage_listen: "127.0.0.1"
+    aihorde_frontpage_port: 8006
+    aihorde_frontpage_repo: "https://github.com/Haidra-Org/AiHordeFrontpage.git"
+    aihorde_frontpage_repo_version: "master"
+
+  roles:
+    - ai_horde
+    - aihorde_frontpage
+
+  post_tasks:
+    - name: Ensure HAProxy config directory exists
+      ansible.builtin.file:
+        path: "{{ playbook_dir }}/../../local-deploy/haproxy"
+        state: directory
+        mode: "0755"
+
+    - name: Verify HAProxy config is present
+      ansible.builtin.stat:
+        path: "{{ playbook_dir }}/../../local-deploy/haproxy/haproxy.cfg"
+      register: _haproxy_cfg
+
+    - name: Fail if HAProxy config is missing
+      ansible.builtin.fail:
+        msg: >-
+          local-deploy/haproxy/haproxy.cfg not found. This is a
+          version-controlled static file — ensure the repo checkout
+          is complete.
+      when: not _haproxy_cfg.stat.exists

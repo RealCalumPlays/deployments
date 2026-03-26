@@ -1,0 +1,202 @@
+---
+# idempotency: skip
+# Full-stack render-only test: validates that all compose files, network
+# overlays, and HAProxy config are rendered correctly without Docker.
+# Safe for CI — no containers started, no network access needed.
+
+- name: Render full-stack configs (no Docker)
+  hosts: localhost
+  connection: local
+  gather_facts: false
+  vars:
+    # Override base dirs to output under temp directories
+    ai_horde_base_dir: /tmp/fullstack-test/ai-horde
+    ai_horde_data_dir: /tmp/fullstack-test/ai-horde/data
+    aihorde_frontpage_base_dir: /tmp/fullstack-test/frontpage
+
+    ai_horde_start_services: false
+    ai_horde_postgres_password: "test-postgres"
+    ai_horde_secret_key: "test-secret"
+
+    aihorde_frontpage_start_services: false
+    aihorde_frontpage_build_config: local
+
+  tasks:
+    - name: Create mock AI-Horde source directory
+      ansible.builtin.file:
+        path: "{{ ai_horde_base_dir }}/src"
+        state: directory
+        mode: "0755"
+
+    - name: Create mock frontpage source directory
+      ansible.builtin.file:
+        path: "{{ aihorde_frontpage_base_dir }}/src"
+        state: directory
+        mode: "0755"
+
+    - name: Run ai_horde role
+      ansible.builtin.include_role:
+        name: ai_horde
+      vars:
+        ai_horde_start_services: false
+
+    - name: Run aihorde_frontpage role
+      ansible.builtin.include_role:
+        name: aihorde_frontpage
+      vars:
+        aihorde_frontpage_start_services: false
+
+  post_tasks:
+    - name: Assert AI-Horde compose exists
+      ansible.builtin.stat:
+        path: /tmp/fullstack-test/ai-horde/docker-compose.yml
+      register: aihorde_compose
+    - name: Verify AI-Horde compose exists
+      ansible.builtin.assert:
+        that: aihorde_compose.stat.exists
+        fail_msg: "AI-Horde docker-compose.yml not rendered"
+
+    - name: Assert Frontpage compose exists
+      ansible.builtin.stat:
+        path: /tmp/fullstack-test/frontpage/docker-compose.yml
+      register: frontpage_compose
+    - name: Verify Frontpage compose exists
+      ansible.builtin.assert:
+        that: frontpage_compose.stat.exists
+        fail_msg: "Frontpage docker-compose.yml not rendered"
+
+    - name: Assert AI-Horde network overlay exists
+      ansible.builtin.stat:
+        path: "{{ playbook_dir }}/../../local-deploy/ai-horde/docker-compose.network-overlay.yml"
+      register: aihorde_overlay
+    - name: Verify AI-Horde network overlay exists
+      ansible.builtin.assert:
+        that: aihorde_overlay.stat.exists
+        fail_msg: "AI-Horde network overlay not found"
+
+    - name: Assert Frontpage network overlay exists
+      ansible.builtin.stat:
+        path: "{{ playbook_dir }}/../../local-deploy/frontpage/docker-compose.network-overlay.yml"
+      register: frontpage_overlay
+    - name: Verify Frontpage network overlay exists
+      ansible.builtin.assert:
+        that: frontpage_overlay.stat.exists
+        fail_msg: "Frontpage network overlay not found"
+
+    - name: Assert Exporter network overlay exists
+      ansible.builtin.stat:
+        path: "{{ playbook_dir }}/../../local-deploy/exporter/docker-compose.network-overlay.yml"
+      register: exporter_overlay
+    - name: Verify Exporter network overlay exists
+      ansible.builtin.assert:
+        that: exporter_overlay.stat.exists
+        fail_msg: "Exporter network overlay not found"
+
+    - name: Assert HAProxy config exists
+      ansible.builtin.stat:
+        path: "{{ playbook_dir }}/../../local-deploy/haproxy/haproxy.cfg"
+      register: haproxy_cfg
+    - name: Verify HAProxy config exists
+      ansible.builtin.assert:
+        that: haproxy_cfg.stat.exists
+        fail_msg: "HAProxy config not found"
+
+    - name: Read HAProxy config
+      ansible.builtin.slurp:
+        path: "{{ playbook_dir }}/../../local-deploy/haproxy/haproxy.cfg"
+      register: haproxy_content
+
+    - name: Assert HAProxy routes to frontpage
+      ansible.builtin.assert:
+        that:
+          - "'aihorde_frontend' in (haproxy_content.content | b64decode)"
+          - "'aihorde-frontpage:8006' in (haproxy_content.content | b64decode)"
+          - "'use_backend aihorde_frontend if root' in (haproxy_content.content | b64decode)"
+        fail_msg: "HAProxy config missing frontpage backend or root routing"
+
+    - name: Assert HAProxy routes to API
+      ansible.builtin.assert:
+        that:
+          - "'horde_client_api' in (haproxy_content.content | b64decode)"
+          - "'aihorde:7001' in (haproxy_content.content | b64decode)"
+          - "'default_backend horde_client_api' in (haproxy_content.content | b64decode)"
+        fail_msg: "HAProxy config missing API backend or default routing"
+
+    - name: Assert HAProxy routes appstats
+      ansible.builtin.assert:
+        that:
+          - "'ai_horde_app_stats' in (haproxy_content.content | b64decode)"
+          - "'use_backend ai_horde_app_stats if aihorde_app_stats' in (haproxy_content.content | b64decode)"
+        fail_msg: "HAProxy config missing stats exporter backend or routing"
+
+    - name: Assert HAProxy routes worker paths
+      ansible.builtin.assert:
+        that:
+          - "'horde_worker_api' in (haproxy_content.content | b64decode)"
+          - "'worker_pop' in (haproxy_content.content | b64decode)"
+        fail_msg: "HAProxy config missing worker backend or pop/submit routing"
+
+    - name: Assert HAProxy compose exists
+      ansible.builtin.stat:
+        path: "{{ playbook_dir }}/../../local-deploy/compose/docker-compose.fullstack-haproxy.yml"
+      register: haproxy_compose
+    - name: Verify HAProxy compose exists
+      ansible.builtin.assert:
+        that: haproxy_compose.stat.exists
+        fail_msg: "HAProxy compose file not found"
+
+    - name: Read HAProxy compose
+      ansible.builtin.slurp:
+        path: "{{ playbook_dir }}/../../local-deploy/compose/docker-compose.fullstack-haproxy.yml"
+      register: haproxy_compose_content
+
+    - name: Assert HAProxy compose uses horde-stack network
+      ansible.builtin.assert:
+        that:
+          - "'horde-stack' in (haproxy_compose_content.content | b64decode)"
+          - "'external: true' in (haproxy_compose_content.content | b64decode)"
+        fail_msg: "HAProxy compose missing horde-stack external network"
+
+    - name: Read AI-Horde network overlay
+      ansible.builtin.slurp:
+        path: "{{ playbook_dir }}/../../local-deploy/ai-horde/docker-compose.network-overlay.yml"
+      register: aihorde_overlay_content
+
+    - name: Assert AI-Horde overlay connects aihorde to horde-stack
+      ansible.builtin.assert:
+        that:
+          - "'aihorde' in (aihorde_overlay_content.content | b64decode)"
+          - "'horde-stack' in (aihorde_overlay_content.content | b64decode)"
+          - "'external: true' in (aihorde_overlay_content.content | b64decode)"
+        fail_msg: "AI-Horde overlay missing aihorde service or horde-stack network"
+
+    - name: Read Frontpage network overlay
+      ansible.builtin.slurp:
+        path: "{{ playbook_dir }}/../../local-deploy/frontpage/docker-compose.network-overlay.yml"
+      register: frontpage_overlay_content
+
+    - name: Assert Frontpage overlay connects frontpage to horde-stack
+      ansible.builtin.assert:
+        that:
+          - "'frontpage' in (frontpage_overlay_content.content | b64decode)"
+          - "'horde-stack' in (frontpage_overlay_content.content | b64decode)"
+          - "'external: true' in (frontpage_overlay_content.content | b64decode)"
+        fail_msg: "Frontpage overlay missing frontpage service or horde-stack network"
+
+    - name: Read Exporter network overlay
+      ansible.builtin.slurp:
+        path: "{{ playbook_dir }}/../../local-deploy/exporter/docker-compose.network-overlay.yml"
+      register: exporter_overlay_content
+
+    - name: Assert Exporter overlay connects horde-exporter to horde-stack
+      ansible.builtin.assert:
+        that:
+          - "'horde-exporter' in (exporter_overlay_content.content | b64decode)"
+          - "'horde-stack' in (exporter_overlay_content.content | b64decode)"
+          - "'external: true' in (exporter_overlay_content.content | b64decode)"
+        fail_msg: "Exporter overlay missing horde-exporter service or horde-stack network"
+
+    - name: Clean up test directory
+      ansible.builtin.file:
+        path: /tmp/fullstack-test
+        state: absent

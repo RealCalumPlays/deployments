@@ -1,0 +1,45 @@
+---
+# AI-Horde backend deployment defaults
+
+# No pre-built GHCR image exists; the role builds from source.
+# Override ai_horde_repo_version to pin to a specific commit or tag.
+ai_horde_repo: "https://github.com/Haidra-Org/AI-Horde.git"
+ai_horde_repo_version: "main"
+
+ai_horde_postgres_image: "ghcr.io/haidra-org/ai-horde-postgres:latest"
+ai_horde_redis_image: "redis:7-alpine"
+
+ai_horde_port: 7001
+ai_horde_listen: "127.0.0.1"
+
+ai_horde_horde_type: "stable"
+ai_horde_verbosity: "-vvvvi"
+
+ai_horde_base_dir: "/opt/ai-horde"
+ai_horde_data_dir: "/var/lib/ai-horde"
+
+# ai_horde_postgres_password:    # MUST be set by operator
+# ai_horde_secret_key:           # MUST be set by operator
+
+ai_horde_postgres_user: "postgres"
+ai_horde_postgres_db: "postgres"
+
+ai_horde_admins: []
+
+# Dict merged into the .env file. Use for R2, OAuth, Stripe, etc.
+# Example:
+#   ai_horde_env_overrides:
+#     R2_TRANSIENT_ACCOUNT: "account-id"
+#     GOOGLE_CLIENT_ID: "xxx.apps.googleusercontent.com"
+ai_horde_env_overrides: {}
+
+ai_horde_log_driver: "local"
+ai_horde_log_max_size: "50m"
+ai_horde_log_max_file: 5
+
+# Set to false in CI/test environments to skip Docker Compose
+# startup and health-check waits. All configs are still rendered.
+ai_horde_start_services: true
+
+# Force a docker build even if the image already exists locally.
+ai_horde_force_build: false

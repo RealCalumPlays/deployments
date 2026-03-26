@@ -1,0 +1,98 @@
+---
+name: Role Tests
+
+on:
+  pull_request:
+    paths:
+      - "roles/**"
+      - "tests/**"
+      - ".github/workflows/role-tests.yml"
+  push:
+    branches: [main, prom-changes]
+  workflow_dispatch: {}
+
+concurrency:
+  group: tests-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  render:
+    name: "render / ${{ matrix.suite }}"
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        suite:
+          - monitoring
+          - ai_horde
+          - regen_worker
+          - artbot
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Install Ansible
+        run: pip install ansible
+
+      - name: Install galaxy dependencies
+        run: ansible-galaxy collection install -r examples/requirements.yml
+
+      - name: Run render tests
+        run: ./tests/run_tests.sh "${{ matrix.suite }}"
+        timeout-minutes: 15
+
+  integration-smoke:
+    name: integration / smoke
+    runs-on: ubuntu-latest
+    needs: render
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Install Ansible
+        run: pip install ansible
+
+      - name: Install galaxy dependencies
+        run: ansible-galaxy collection install -r examples/requirements.yml
+
+      - name: Run integration smoke test
+        run: ./tests/run_tests.sh integration
+        timeout-minutes: 15
+
+  integration-live:
+    name: integration / live
+    runs-on: ubuntu-latest
+    needs: render
+    if: github.event_name == 'workflow_dispatch'
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Install Ansible
+        run: pip install ansible
+
+      - name: Install galaxy dependencies
+        run: ansible-galaxy collection install -r examples/requirements.yml
+
+      - name: Deploy AI-Horde + probe
+        run: ./tests/integration/local_deploy.sh up
+        timeout-minutes: 20
+
+      - name: Tear down
+        if: always()
+        run: ./tests/integration/local_deploy.sh down

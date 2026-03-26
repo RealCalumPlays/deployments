@@ -1,0 +1,18 @@
+---
+# Handlers for ai_horde role
+
+- name: Reload systemd
+  ansible.builtin.systemd:
+    daemon_reload: true
+  become: true
+  when: ai_horde_start_services | bool
+
+- name: Restart AI-Horde stack
+  ansible.builtin.shell: >
+    docker compose build --pull &&
+    docker compose up -d
+  args:
+    chdir: "{{ ai_horde_base_dir }}"
+  become: true
+  changed_when: true
+  when: ai_horde_start_services | bool

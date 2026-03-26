@@ -1,0 +1,145 @@
+---
+# Test playbook: artbot and artbot_revproxy roles — config validation.
+#
+# The artbot role is heavily shell-based (NVM, npm, PM2) — most tasks
+# require a real Node.js runtime. We focus on what we CAN validate:
+#
+# Play 1: artbot defaults are loadable and sensible
+# Play 2: artbot_revproxy HAProxy template renders correctly
+# Play 3: artbot_revproxy certbot renewal script renders correctly
+
+- name: Test artbot role defaults
+  hosts: testhost
+  become: true
+  tasks:
+    - name: Load artbot defaults
+      ansible.builtin.include_vars:
+        file: "../../roles/artbot/defaults/main.yml"
+
+    - name: Assert required variables are defined
+      ansible.builtin.assert:
+        that:
+          - artbot_status_api is defined
+          - artbot_status_api | length > 0
+          - force_build is defined
+
+    - name: Stat artbot tasks file
+      ansible.builtin.stat:
+        path: "{{ playbook_dir }}/../../roles/artbot/tasks/main.yml"
+      register: _tasks
+      delegate_to: localhost
+
+    - name: Assert artbot tasks file exists
+      ansible.builtin.assert:
+        that:
+          - _tasks.stat.exists
+
+    - name: Stat artbot meta file
+      ansible.builtin.stat:
+        path: "{{ playbook_dir }}/../../roles/artbot/meta/main.yml"
+      register: _meta
+      delegate_to: localhost
+
+    - name: Assert artbot meta file exists
+      ansible.builtin.assert:
+        that:
+          - _meta.stat.exists
+
+- name: Test artbot_revproxy HAProxy template rendering
+  hosts: testhost
+  become: true
+  vars:
+    artbot_domain: "artbot.test.local"
+    other_domains: "artbot-alt.test.local"
+    artbot_server: "127.0.0.1"
+  tasks:
+    - name: Create haproxy cert directory
+      ansible.builtin.file:
+        path: /etc/haproxy/cert
+        state: directory
+        mode: "0755"
+
+    - name: Template HAProxy config
+      ansible.builtin.template:
+        src: "../../roles/artbot_revproxy/templates/haproxy.cfg.j2"
+        dest: /tmp/haproxy_test.cfg
+        mode: "0644"
+
+    - name: Read HAProxy config
+      ansible.builtin.slurp:
+        src: /tmp/haproxy_test.cfg
+      register: _haproxy
+
+    - name: Assert HAProxy has correct domain binding
+      ansible.builtin.assert:
+        that:
+          - "'artbot.test.local' in _haproxy.content | b64decode"
+
+    - name: Assert HAProxy has SSL configuration
+      ansible.builtin.assert:
+        that:
+          - "'ssl crt /etc/haproxy/cert/artbot.test.local.pem' in _haproxy.content | b64decode"
+          - "'redirect scheme https' in _haproxy.content | b64decode"
+
+    - name: Assert HAProxy has backend pointing at artbot
+      ansible.builtin.assert:
+        that:
+          - "'server artbot_server 127.0.0.1:3001' in _haproxy.content | b64decode"
+
+    - name: Assert HAProxy has Let's Encrypt passthrough
+      ansible.builtin.assert:
+        that:
+          - "'/.well-known/acme-challenge/' in _haproxy.content | b64decode"
+          - "'lets_encrypt' in _haproxy.content | b64decode"
+
+    - name: Assert HAProxy has stats frontend
+      ansible.builtin.assert:
+        that:
+          - "'bind *:8404' in _haproxy.content | b64decode"
+          - "'stats enable' in _haproxy.content | b64decode"
+
+    - name: Assert HAProxy has security headers
+      ansible.builtin.assert:
+        that:
+          - "'X-Forwarded-Proto' in _haproxy.content | b64decode"
+          - "'X-Real-IP' in _haproxy.content | b64decode"
+
+    - name: Assert HAProxy has connection limits
+      ansible.builtin.assert:
+        that:
+          - "'maxconn 100000' in _haproxy.content | b64decode"
+
+- name: Test artbot_revproxy certbot renewal script rendering
+  hosts: testhost
+  become: true
+  vars:
+    artbot_domain: "artbot.test.local"
+    other_domains: "artbot-alt.test.local"
+  tasks:
+    - name: Template certbot renewal script
+      ansible.builtin.template:
+        src: "../../roles/artbot_revproxy/templates/certbot_renew.sh.j2"
+        dest: /tmp/certbot_renew_test.sh
+        mode: "0755"
+
+    - name: Read certbot renewal script
+      ansible.builtin.slurp:
+        src: /tmp/certbot_renew_test.sh
+      register: _certbot
+
+    - name: Assert certbot script has correct domains
+      ansible.builtin.assert:
+        that:
+          - "'--domains artbot.test.local,artbot-alt.test.local' in _certbot.content | b64decode"
+
+    - name: Assert certbot script reloads haproxy
+      ansible.builtin.assert:
+        that:
+          - "'systemctl reload haproxy' in _certbot.content | b64decode"
+
+    - name: Assert certbot script combines cert files
+      ansible.builtin.assert:
+        that:
+          - "'privkey.pem' in _certbot.content | b64decode"
+          - "'fullchain.pem' in _certbot.content | b64decode"
+          - "'/etc/haproxy/cert/artbot.test.local.pem' in _certbot.content | b64decode"

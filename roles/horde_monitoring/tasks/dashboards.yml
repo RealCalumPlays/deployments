@@ -155,24 +155,18 @@
 #   { "type": "prometheus", "uid": "..." }
 # This catches dashboards that embed a literal UID rather than a variable.
 
-- name: Patch hardcoded datasource objects in Org 1 app dashboards
-  ansible.builtin.shell: |
-    python3 -c "
-    import json, sys, pathlib
-    p = pathlib.Path(sys.argv[1])
-    d = json.loads(p.read_text())
-    def patch(obj, uid):
-        if isinstance(obj, dict):
-            if obj.get('type') == 'prometheus' and 'uid' in obj:
-                obj['uid'] = uid
-            for v in obj.values():
-                patch(v, uid)
-        elif isinstance(obj, list):
-            for v in obj:
-                patch(v, uid)
-    patch(d, sys.argv[2])
-    p.write_text(json.dumps(d, indent=2))
-    " "{{ grafana_dashboard_dir }}/{{ item.0 }}/{{ item.1.path | basename }}" "{{ item.2 }}"
+- name: Deploy dashboard UID patching script
+  ansible.builtin.copy:
+    src: patch_dashboard_uid.py
+    dest: /usr/local/bin/patch_dashboard_uid.py
+    mode: "0755"
+  become: true
+
+- name: Patch hardcoded datasource objects in all dashboard sets
+  ansible.builtin.command: >
+    python3 /usr/local/bin/patch_dashboard_uid.py
+    "{{ grafana_dashboard_dir }}/{{ item.0 }}/{{ item.1.path | basename }}"
+    "{{ item.2 }}"
   become: true
   loop: "{{ _patch_targets }}"
   loop_control:

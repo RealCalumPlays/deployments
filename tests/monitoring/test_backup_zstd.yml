@@ -1,4 +1,5 @@
 ---
+# idempotency: skip
 # Test playbook: Custom retention, backup templates, extra overrides, and
 # the alerting-rules-disabled path.  Validates configuration permutations
 # that are NOT covered by the full-stack or prometheus-only tests.
@@ -55,8 +56,6 @@
           - "'180d' in (mimir_runtime_overrides.content | b64decode)"
           - "'100000' in (mimir_runtime_overrides.content | b64decode)"
 
-    # ── Alerting rules skip path ──────────────────────────────────
-
     - name: Check alerting rules file is absent (disabled)
       ansible.builtin.stat:
         path: /etc/prometheus/rules/monitoring-stack.rules
@@ -67,8 +66,6 @@
         that:
           - not _rules_file.stat.exists
         fail_msg: "Alerting rules should be absent when monitoring_install_alerting_rules=false"
-
-    # ── Backup service/timer template rendering ───────────────────
 
     - name: Check backup systemd service was rendered
       ansible.builtin.stat:
@@ -149,8 +146,6 @@
           - "'--remove' not in (backup_service_content.content | b64decode)"
         fail_msg: "Backup should default to append-only (no --remove)"
 
-    # ── Grafana anonymous disabled path ───────────────────────────
-
     - name: Read Grafana datasources
       ansible.builtin.slurp:
         path: /etc/grafana/provisioning/datasources/mimir.yml
@@ -171,8 +166,6 @@
       ansible.builtin.assert:
         that:
           - "'ANONYMOUS_ENABLED=false' in (compose_config.content | b64decode)"
-
-    # ── Pyroscope absent when disabled ────────────────────────────
 
     - name: Assert Pyroscope is absent when not enabled
       ansible.builtin.assert:

@@ -61,7 +61,8 @@
   when: not self_signed_cert
 
 - name: Merge certbot certificates for {{ artbot_domain }}
-  ansible.builtin.shell: cat /etc/letsencrypt/live/{{ artbot_domain }}/privkey.pem /etc/letsencrypt/live/{{ artbot_domain }}/fullchain.pem >
+  ansible.builtin.shell:
+    cat /etc/letsencrypt/live/{{ artbot_domain }}/privkey.pem /etc/letsencrypt/live/{{ artbot_domain }}/fullchain.pem >
     /etc/haproxy/cert/{{ artbot_domain }}.pem
   changed_when: true
   tags:
@@ -84,7 +85,7 @@
 - name: Ensure certificate renew script exists
   ansible.builtin.template:
     src: certbot_renew.sh.j2
-    dest: /root/certbot_renew.sh
+    dest: /usr/local/sbin/certbot_renew.sh
     owner: root
     group: root
     mode: "0744"
@@ -95,7 +96,7 @@
     user: root
     name: Renew Horde Certificate
     special_time: daily
-    job: /root/certbot_renew.sh
+    job: /usr/local/sbin/certbot_renew.sh
   tags:
     - haproxy
     - cron

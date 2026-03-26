@@ -1,4 +1,5 @@
 ---
+# idempotency: skip
 # Test playbook: Full stack (Mimir + Grafana + HAProxy)
 - name: Test horde_monitoring - Full stack
   hosts: testhost
@@ -21,6 +22,32 @@
     grafana_provision_dashboards: false
     monitoring_start_services: false
     mimir_backup_enabled: false
+
+  pre_tasks:
+    - name: Install HAProxy for config validation
+      ansible.builtin.apt:
+        name: haproxy
+        state: present
+        update_cache: true
+
+    - name: Create HAProxy config directory for test
+      ansible.builtin.file:
+        path: /etc/haproxy
+        state: directory
+        mode: "0755"
+
+    - name: Create stub HAProxy config for test
+      ansible.builtin.copy:
+        dest: /etc/haproxy/haproxy.cfg
+        content: |
+          global
+              log /dev/log local0
+          defaults
+              mode http
+              timeout connect 5s
+              timeout client 50s
+              timeout server 50s
+        mode: "0644"
 
   roles:
     - role: horde_monitoring
@@ -336,6 +363,32 @@
     monitoring_start_services: false
     mimir_backup_enabled: false
 
+  pre_tasks:
+    - name: Install HAProxy for config validation
+      ansible.builtin.apt:
+        name: haproxy
+        state: present
+        update_cache: true
+
+    - name: Create HAProxy config directory for test
+      ansible.builtin.file:
+        path: /etc/haproxy
+        state: directory
+        mode: "0755"
+
+    - name: Create stub HAProxy config for test
+      ansible.builtin.copy:
+        dest: /etc/haproxy/haproxy.cfg
+        content: |
+          global
+              log /dev/log local0
+          defaults
+              mode http
+              timeout connect 5s
+              timeout client 50s
+              timeout server 50s
+        mode: "0644"
+
   roles:
     - role: horde_monitoring
 
@@ -508,8 +561,6 @@
       loop: "{{ _tempo_dirs.results }}"
       loop_control:
         label: "{{ item.item }}"
-
-    # ── Pyroscope assertions ──────────────────────────────────────
 
     - name: Assert Pyroscope service is present in Compose
       ansible.builtin.assert:

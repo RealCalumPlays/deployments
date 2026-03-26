@@ -21,3 +21,7 @@ build/
 *.egg/
 *.tar.gz
 *.zip
+
+geerlingguy.swap/
+docs/plans/
+tests/test-results/

@@ -1,28 +1,28 @@
 #!/usr/bin/env bash
-# ─────────────────────────────────────────────────────────────────────
+
 # Local deployment of the full horde monitoring + exporter stack for
 # manual validation.  Renders ALL configs via Ansible (including
 # Prometheus, Alertmanager, Exporter, Alloy, and the Compose overlay),
 # then starts everything via Docker Compose.
 #
 # All ports, image versions, and configuration values are defined once
-# in tests/local_deploy.yml.  The Ansible playbook renders them into
+# in tests/monitoring/local_deploy.yml.  The Ansible playbook renders them into
 # config files and a local-deploy.env that this script sources.
 # Nothing is hardcoded here.
 #
 # Usage:
-#   ./tests/local_deploy.sh up       # render configs + start full stack
-#   ./tests/local_deploy.sh down     # tear down stack + remove files
-#   ./tests/local_deploy.sh status   # show running containers
-#   ./tests/local_deploy.sh logs     # tail compose logs
+#   ./tests/monitoring/local_deploy.sh up       # render configs + start full stack
+#   ./tests/monitoring/local_deploy.sh down     # tear down stack + remove files
+#   ./tests/monitoring/local_deploy.sh status   # show running containers
+#   ./tests/monitoring/local_deploy.sh logs     # tail compose logs
 #
 # After "up", access the URLs printed by the banner (ports come from
 # local_deploy.yml and are displayed after stack startup).
-# ─────────────────────────────────────────────────────────────────────
+
 set -euo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-REPO_ROOT="$(cd "$SCRIPT_DIR/.." && pwd)"
+REPO_ROOT="$(cd "$SCRIPT_DIR/../.." && pwd)"
 LOCAL_ROOT="$REPO_ROOT/local-deploy"
 COMPOSE_DIR="$LOCAL_ROOT/compose"
 ENV_FILE="$LOCAL_ROOT/local-deploy.env"
@@ -49,7 +49,7 @@ dc() {
   docker compose $args "$@"
 }
 
-# ── Prerequisite checks ──────────────────────────────────────────────
+
 check_prerequisites() {
   local missing=0
   for cmd in docker curl python3; do
@@ -69,7 +69,7 @@ check_prerequisites() {
   log "Prerequisites verified (docker, curl, python3, docker compose)."
 }
 
-# ── Locate ansible-playbook ─────────────────────────────────────────
+
 find_ansible() {
   if [ -x "$REPO_ROOT/.venv/bin/ansible-playbook" ]; then
     ANSIBLE_PLAYBOOK="$REPO_ROOT/.venv/bin/ansible-playbook"
@@ -82,7 +82,7 @@ find_ansible() {
   fi
 }
 
-# ── Render configs via Ansible ───────────────────────────────────────
+
 render_configs() {
   find_ansible
   log "Rendering monitoring stack configs into $LOCAL_ROOT ..."
@@ -95,7 +95,7 @@ render_configs() {
   log "Config rendering complete."
 }
 
-# ── Load rendered environment ────────────────────────────────────────
+
 load_env() {
   if [ ! -f "$ENV_FILE" ]; then
     err "Environment file not found at $ENV_FILE — did render_configs fail?"
@@ -109,7 +109,7 @@ load_env() {
   log "Loaded environment from $ENV_FILE"
 }
 
-# ── Wait helper ───────────────────────────────────────────────────────
+
 wait_for_url() {
   local url="$1" label="$2" timeout="${3:-60}"
   local retries=$(( timeout / 2 ))
@@ -125,7 +125,7 @@ wait_for_url() {
   return 1
 }
 
-# ── Start the stack ──────────────────────────────────────────────────
+
 compose_up() {
   if [ ! -f "$COMPOSE_DIR/docker-compose.yml" ]; then
     err "No docker-compose.yml found — run '$0 up' first."
@@ -206,7 +206,7 @@ with open(sys.argv[1], 'w') as f:
   wait_for_url "http://127.0.0.1:${EXPORTER_PORT}/metrics" "Exporter" 180 || true
 }
 
-# ── Tear down ────────────────────────────────────────────────────────
+
 compose_down() {
   if [ -f "$COMPOSE_DIR/docker-compose.yml" ]; then
     log "Stopping Docker Compose stack ..."
@@ -221,7 +221,7 @@ compose_down() {
   log "Local deployment cleaned up."
 }
 
-# ── Status ───────────────────────────────────────────────────────────
+
 compose_status() {
   if [ ! -f "$COMPOSE_DIR/docker-compose.yml" ]; then
     info "No local deployment found."
@@ -230,7 +230,7 @@ compose_status() {
   dc ps
 }
 
-# ── Logs ─────────────────────────────────────────────────────────────
+
 compose_logs() {
   if [ ! -f "$COMPOSE_DIR/docker-compose.yml" ]; then
     err "No local deployment found."
@@ -239,7 +239,7 @@ compose_logs() {
   dc logs -f --tail=100
 }
 
-# ── Print access info ───────────────────────────────────────────────
+
 print_banner() {
   echo ""
   echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
@@ -272,7 +272,7 @@ print_banner() {
   echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
 }
 
-# ── Main ─────────────────────────────────────────────────────────────
+
 main() {
   local cmd="${1:-up}"
 

@@ -32,6 +32,8 @@ corresponding example playbook — or build your own `site.yml`.
 
 | Role                                                     | Description                                  |
 | -------------------------------------------------------- | -------------------------------------------- |
+| [ai_horde](roles/ai_horde/README.md)                     | AI Horde backend (Flask + Postgres + Redis)  |
+| [aihorde_frontpage](roles/aihorde_frontpage/README.md)   | AiHordeFrontpage (Angular SSR website)       |
 | [artbot](roles/artbot/README.md)                         | Web frontend for AI Horde                    |
 | [artbot_revproxy](roles/artbot_revproxy/README.md)       | HAProxy reverse proxy for Artbot             |
 | [horde_regen_worker](roles/horde_regen_worker/README.md) | AI Horde worker (Dreamer, Scribe, Alchemist) |
@@ -58,3 +60,159 @@ and how the monitoring roles work together.
 | [Credentials](docs/CREDENTIALS.md)           | Credential management and rotation                |
 | [Upgrading](docs/UPGRADING.md)               | Component version upgrade procedures              |
 | [Migration](docs/MIGRATION.md)               | Host migration runbook (planned and forced)       |
+
+## Testing
+
+The collection ships a two-tier test suite under `tests/`.
+
+### Tier 1 — Render tests (fast, no services started)
+
+Validate Ansible template rendering, variable defaults, and negative
+(expected-failure) cases. Run entirely in check mode — no Docker daemon
+required for the test playbooks themselves.
+
+```bash
+# All render tests (builds a Docker systemd container per test):
+./tests/run_tests.sh
+
+# List all discoverable tests without running them:
+./tests/run_tests.sh --list
+
+# By role:
+./tests/run_tests.sh monitoring
+./tests/run_tests.sh ai_horde
+./tests/run_tests.sh regen_worker
+./tests/run_tests.sh artbot
+./tests/run_tests.sh frontpage
+./tests/run_tests.sh full_stack
+
+# Specific test:
+./tests/run_tests.sh monitoring/test_full_stack
+```
+
+#### Test output and logs
+
+Every `run_tests.sh` invocation writes per-test log files and a structured
+summary under `tests/test-results/<YYYYMMDD-HHMMSS>/`:
+
+```
+tests/test-results/20260325-143012/
+├── monitoring__test_full_stack.log               # full Ansible output
+├── monitoring__test_full_stack__idempotency.log   # idempotency re-run
+├── monitoring__test_runtime_services.log
+├── ai_horde__test_deploy.log
+└── summary.txt                                   # machine-readable results
+```
+
+The runner prints a colour-coded summary table at the end with one-line
+failure reasons extracted from the Ansible output:
+
+```
+TEST                                                STATUS  DETAILS
+────────────────────────────────────────────────────────────────────────────
+monitoring/test_full_stack                          PASS
+ai_horde/test_deploy                                FAIL    {"msg": "No package matching 'python3-venv'"}
+────────────────────────────────────────────────────────────────────────────
+```
+
+`summary.txt` is pipe-delimited for scripted analysis:
+
+```
+# FORMAT: STATUS | LABEL | LOG_FILE | REASON
+PASS | monitoring/test_full_stack | monitoring__test_full_stack.log |
+FAIL | ai_horde/test_deploy | ai_horde__test_deploy.log | {"msg": "No package matching..."}
+```
+
+Every playbook (except runtime and local_deploy tests) is automatically
+re-run after the first pass; the idempotency check fails the test if any
+task reports `changed` on the second run.
+
+#### Playbook markers
+
+Test playbooks support YAML comment markers near the top of the file
+(within the first 5 lines) to control runner behaviour:
+
+| Marker                      | Effect                                                              |
+| --------------------------- | ------------------------------------------------------------------- |
+| `# idempotency: skip`       | Skip the idempotency re-run for this test                           |
+| `# requires: docker-daemon` | Skip the entire test when the target container has no Docker daemon |
+
+Multi-play tests that intentionally overwrite the same files with different
+variable sets (e.g. `test_alloy_role.yml`) should declare `# idempotency: skip`.
+
+### Tier 2 — Integration tests (requires Docker)
+
+Exercise cross-role coherence and optionally spin up live services.
+
+```bash
+# Smoke test — config-only, CI-friendly:
+./tests/run_tests.sh integration
+
+# Local deploy — starts AI-Horde in Docker:
+./tests/integration/local_deploy.sh up
+./tests/integration/local_deploy.sh down
+
+# With GPU worker (requires NVIDIA GPU + nvidia-container-toolkit):
+./tests/integration/local_deploy.sh up --with-worker
+```
+
+### Tier 3 — Full-stack local deploy (requires Docker)
+
+Spins up the complete Horde business stack on one machine: Backend (AI-Horde +
+Postgres + Redis), Frontend (AiHordeFrontpage), Stats Exporter, and HAProxy as
+the unified edge router. Monitoring and the GPU worker are optional tiers.
+
+```bash
+# Core stack (backend + frontpage + exporter + HAProxy):
+./tests/full_stack/local_deploy.sh up
+
+# With monitoring (Grafana, Mimir, Prometheus, Alertmanager, Alloy):
+./tests/full_stack/local_deploy.sh up --with-monitoring
+
+# With GPU worker (requires NVIDIA GPU):
+./tests/full_stack/local_deploy.sh up --with-worker
+
+# With Artbot on a separate port (8080):
+./tests/full_stack/local_deploy.sh up --with-artbot
+
+# Everything:
+./tests/full_stack/local_deploy.sh up --all
+
+# Tear down (unconditional — stops all tiers):
+./tests/full_stack/local_deploy.sh down
+
+# Status:
+./tests/full_stack/local_deploy.sh status
+
+# Logs for a specific tier:
+./tests/full_stack/local_deploy.sh logs backend
+./tests/full_stack/local_deploy.sh logs frontpage
+./tests/full_stack/local_deploy.sh logs haproxy
+./tests/full_stack/local_deploy.sh logs monitoring
+./tests/full_stack/local_deploy.sh logs artbot
+```
+
+**Port assignments (full-stack local deploy):**
+
+| Service          | Port | Notes                                |
+| ---------------- | ---- | ------------------------------------ |
+| HAProxy (main)   | 80   | Unified edge router                  |
+| HAProxy stats    | 8404 | http://localhost:8404/stats          |
+| AiHordeFrontpage | 8006 | Angular SSR (also via HAProxy on 80) |
+| AI-Horde API     | 7001 | Direct; also via /api on port 80     |
+| Stats Exporter   | 9109 | Prometheus metrics                   |
+| Grafana          | 3000 | Monitoring dashboards                |
+| Prometheus       | 9090 | Metrics collection                   |
+| Artbot HAProxy   | 8080 | Artbot site (`--with-artbot`)        |
+
+### Test coverage by role
+
+| Role                 | Render | Negative | Integration | Full-stack |
+| -------------------- | :----: | :------: | :---------: | :--------: |
+| horde_monitoring     |   ✅   |    ✅    |      —      |     ✅     |
+| ai_horde             |   ✅   |    ✅    |     ✅      |     ✅     |
+| aihorde_frontpage    |   ✅   |    —     |      —      |     ✅     |
+| horde_regen_worker   |   ✅   |    —     |     ✅      |     —      |
+| artbot / revproxy    |   ✅   |    —     |      —      |     —      |
+| horde_stats_exporter |   —    |    —     |      —      |     ✅     |
+| horde_alloy          |   —    |    —     |      —      |     —      |

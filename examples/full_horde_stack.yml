@@ -1,0 +1,87 @@
+---
+# Example playbook: full AI Horde stack (backend + frontpage + monitoring + worker + exporter)
+#
+# Usage:
+#   ansible-playbook -i inventory.yml full_horde_stack.yml -K
+#
+# This deploys:
+#   Play 1 — AI-Horde backend  (Docker Compose: Flask + PostgreSQL + Redis)
+#   Play 2 — AiHordeFrontpage  (Angular SSR website, port 8006)
+#   Play 3 — Monitoring stack  (Mimir + Grafana + Prometheus + stats exporter)
+#   Play 4 — Regen worker      (connects to AI-Horde via horde_url)
+#
+# Prerequisites:
+#   ansible-galaxy collection install -r requirements.yml
+#   Vault file or --ask-vault-pass for secrets
+#
+# Inventory groups:
+#   [horde_server]   — host running the AI-Horde backend + frontpage + monitoring
+#   [regen_workers]  — GPU-equipped hosts running image generation workers
+
+# ---------------------------------------------------------------------------
+# Play 1: AI-Horde backend
+# ---------------------------------------------------------------------------
+- name: Deploy AI-Horde backend
+  hosts: horde_server
+  become: true
+
+  roles:
+    - role: haidra.deployments.ai_horde
+      vars:
+        ai_horde_postgres_password: "{{ vault_ai_horde_pg_password }}"
+        ai_horde_secret_key: "{{ vault_ai_horde_secret_key }}"
+        ai_horde_listen: "0.0.0.0"
+        ai_horde_admins: ["admin_user#1"]
+      tags: [horde]
+
+# ---------------------------------------------------------------------------
+# Play 2: AiHordeFrontpage (depends on backend being reachable)
+# ---------------------------------------------------------------------------
+- name: Deploy AiHordeFrontpage
+  hosts: horde_server
+  become: true
+
+  roles:
+    - role: haidra.deployments.aihorde_frontpage
+      vars:
+        aihorde_frontpage_build_config: production
+      tags: [frontpage]
+
+# ---------------------------------------------------------------------------
+# Play 3: Monitoring stack (Mimir + Grafana + Prometheus + stats exporter)
+# ---------------------------------------------------------------------------
+- name: Deploy monitoring stack
+  hosts: horde_server
+  become: true
+
+  roles:
+    - role: haidra.deployments.horde_monitoring
+      vars:
+        monitoring_install_mimir: true
+        monitoring_install_grafana: true
+        grafana_admin_password: "{{ vault_grafana_admin_password }}"
+      tags: [monitoring]
+
+    - role: haidra.deployments.horde_stats_exporter
+      vars:
+        exporter_api_base_url: "http://localhost:7001/api/v2"
+      tags: [exporter]
+
+# ---------------------------------------------------------------------------
+# Play 4: Regen worker (deploys to GPU hosts)
+# ---------------------------------------------------------------------------
+- name: Deploy regen worker
+  hosts: regen_workers
+  become: true
+
+  roles:
+    - role: haidra.deployments.horde_regen_worker
+      vars:
+        # Point workers at the AI-Horde backend
+        horde_url: "http://{{ hostvars[groups['horde_server'][0]].ansible_host }}:7001"
+        api_key: "{{ vault_worker_api_key }}"
+        dreamer_name: "{{ inventory_hostname }}-dreamer"
+        max_power: 32
+        models_to_load:
+          - TOP 5
+      tags: [worker]

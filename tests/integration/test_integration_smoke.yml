@@ -1,0 +1,160 @@
+---
+# Integration smoke test — render-only (CI-friendly, no Docker daemon).
+#
+# Verifies that AI-Horde and worker configs render coherently together:
+# the worker's bridgeData.yaml points at the correct horde_url, and the
+# AI-Horde compose stack exposes the expected port.
+
+- name: Test integration config rendering
+  hosts: testhost
+  become: true
+  vars:
+    # AI-Horde role vars
+    ai_horde_start_services: false
+    ai_horde_postgres_password: "test-password"
+    ai_horde_secret_key: "test-secret"
+    ai_horde_port: 7001
+    ai_horde_listen: "0.0.0.0"
+    ai_horde_admins: ["test_user#1"]
+
+    # Worker template vars (for bridgeData rendering)
+    horde_url: "http://localhost:7001"
+    api_key: "test-key"
+    worker_username: "testworker"
+    worker_runtime_dir: "horde-worker-regen"
+    worker_clone_dir: "horde-worker-regen"
+    worker_service_name: "ai_horde_worker"
+    worker_environment: ""
+    amd_gpu: false
+    models_dir: "regen_worker_models"
+    priority_usernames: []
+    max_threads: 1
+    queue_size: 1
+    max_batch: 1
+    max_power: 8
+    allow_unsafe_ip: true
+    require_upfront_kudos: false
+    dreamer_name: "integration-test-dreamer"
+    dreamer_worker: true
+    scribe_name: "integration-test-scribe"
+    scribe_worker: false
+    alchemist_name: "integration-test-alchemist"
+    alchemist_worker: false
+    blacklist: []
+    nsfw: false
+    censor_nsfw: false
+    censorlist: []
+    allow_img2img: true
+    allow_painting: true
+    allow_controlnet: false
+    allow_sdxl_controlnet: false
+    allow_lora: false
+    max_lora_cache_size: 10
+    allow_post_processing: true
+    safety_on_gpu: false
+    dynamic_models: false
+    number_of_dynamic_models: 0
+    max_models_to_download: 10
+    stats_output_frequency: 30
+    moderate_performance_mode: false
+    high_performance_mode: false
+    exit_on_unhandled_faults: true
+    kai_url: "http://localhost:5000"
+    max_length: 80
+    max_context_length: 1024
+    branded_model: true
+    forms:
+      - "caption"
+      - "nsfw"
+    models_to_load:
+      - "stable_diffusion"
+    models_to_skip:
+      - "pix2pix"
+
+  roles:
+    - ai_horde
+
+  post_tasks:
+    - name: Stat AI-Horde compose
+      ansible.builtin.stat:
+        path: /opt/ai-horde/docker-compose.yml
+      register: _compose
+
+    - name: Assert compose exists
+      ansible.builtin.assert:
+        that:
+          - _compose.stat.exists
+
+    - name: Read AI-Horde compose
+      ansible.builtin.slurp:
+        src: /opt/ai-horde/docker-compose.yml
+      register: _compose_content
+
+    - name: Assert AI-Horde compose exposes port 7001
+      ansible.builtin.assert:
+        that:
+          - "'7001' in _compose_content.content | b64decode"
+
+    - name: Assert AI-Horde compose listens on 0.0.0.0 (for integration)
+      ansible.builtin.assert:
+        that:
+          - "'0.0.0.0:7001:7001' in _compose_content.content | b64decode"
+
+    - name: Create worker config directory
+      ansible.builtin.file:
+        path: /tmp/integration-worker
+        state: directory
+        mode: "0755"
+
+    - name: Render bridgeData.yaml for integration
+      ansible.builtin.template:
+        src: "../../roles/horde_regen_worker/templates/bridgeData.yaml.j2"
+        dest: /tmp/integration-worker/bridgeData.yaml
+        mode: "0644"
+
+    - name: Read bridgeData.yaml
+      ansible.builtin.slurp:
+        src: /tmp/integration-worker/bridgeData.yaml
+      register: _bridge
+
+    - name: Assert bridgeData.yaml points at local AI-Horde
+      ansible.builtin.assert:
+        that:
+          - "'horde_url: http://localhost:7001' in _bridge.content | b64decode"
+        fail_msg: >
+          bridgeData.yaml should point at http://localhost:7001 (the local
+          AI-Horde instance) but it doesn't.  This means the worker would
+          not be able to reach the backend.
+
+    - name: Assert bridgeData has correct worker identity
+      ansible.builtin.assert:
+        that:
+          - "'dreamer_name: integration-test-dreamer' in _bridge.content | b64decode"
+
+    - name: Read AI-Horde .env
+      ansible.builtin.slurp:
+        src: /opt/ai-horde/.env
+      register: _env_content
+
+    - name: Assert .env has integration-compatible settings
+      ansible.builtin.assert:
+        that:
+          - "'POSTGRES_PASS=test-password' in _env_content.content | b64decode"
+          - "'secret_key=test-secret' in _env_content.content | b64decode"
+
+    - name: Render worker systemd unit
+      ansible.builtin.template:
+        src: "../../roles/horde_regen_worker/templates/ai_horde_worker.j2"
+        dest: /tmp/integration-worker/ai_horde_worker.service
+        mode: "0644"
+
+    - name: Read worker systemd unit
+      ansible.builtin.slurp:
+        src: /tmp/integration-worker/ai_horde_worker.service
+      register: _worker_service
+
+    - name: Assert worker systemd unit is valid
+      ansible.builtin.assert:
+        that:
+          - "'horde-bridge.sh' in _worker_service.content | b64decode"
+          - "'/home/testworker/horde-worker-regen' in _worker_service.content | b64decode"

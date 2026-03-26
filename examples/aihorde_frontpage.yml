@@ -1,0 +1,31 @@
+---
+# Example playbook: deploy the AiHordeFrontpage (Angular SSR website).
+#
+# Usage:
+#   ansible-playbook examples/aihorde_frontpage.yml -i inventory.yml
+#
+# This deploys the Angular SSR application as a Docker Compose service
+# listening on port 8006. Deploy AI-Horde first (see examples/ai_horde.yml),
+# then set aihorde_frontpage_build_config to local when targeting a local API.
+#
+# Required variables (no defaults — fail-fast if unset):
+#   (none — the role has safe defaults for all variables)
+#
+# Commonly overridden variables:
+#   aihorde_frontpage_build_config   — Angular build config: production (default), local, development
+#   aihorde_frontpage_port           — Host-side port (default: 8006)
+#   aihorde_frontpage_listen         — Bind address (default: 127.0.0.1)
+#
+# Prerequisites:
+#   ansible-galaxy collection install -r requirements.yml
+#   Docker + Docker Compose V2 on the target host.
+
+- name: Deploy AiHordeFrontpage
+  hosts: webservers
+  become: true
+
+  roles:
+    - role: aihorde_frontpage
+      vars:
+        aihorde_frontpage_build_config: production
+      tags: [frontpage]

@@ -1,0 +1,24 @@
+---
+# Example: Deploy AI-Horde backend
+#
+# Usage:
+#   ansible-playbook examples/ai_horde.yml -i inventory.yml
+#
+# Required variables (set via inventory, group_vars, or vault):
+#   ai_horde_postgres_password  — PostgreSQL password (no default, fail-fast)
+#   ai_horde_secret_key         — Flask secret key (no default, fail-fast)
+#
+# The regen worker connects to AI-Horde via horde_url.
+# Deploy AI-Horde first, then point workers at it.
+# See examples/regen_worker.yml for worker deployment.
+
+- name: Deploy AI-Horde backend
+  hosts: horde_server
+  become: true
+  roles:
+    - role: ai_horde
+      vars:
+        ai_horde_postgres_password: "{{ vault_ai_horde_pg_password }}"
+        ai_horde_secret_key: "{{ vault_ai_horde_secret_key }}"
+        ai_horde_listen: "127.0.0.1"
+        ai_horde_admins: ["admin_user#1"]

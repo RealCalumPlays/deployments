@@ -42,7 +42,8 @@
   tags: artbot_app
 
 - name: Setup pm2 service
-  ansible.builtin.shell: env PATH=$PATH:/home/artbot/.nvm/versions/node/v18.19.0/bin /home/artbot/.nvm/versions/node/v18.19.0/lib/node_modules/pm2/bin/pm2
+  ansible.builtin.shell:
+    env PATH=$PATH:/home/artbot/.nvm/versions/node/v18.19.0/bin /home/artbot/.nvm/versions/node/v18.19.0/lib/node_modules/pm2/bin/pm2
     startup systemd -u artbot --hp /home/artbot
   args:
     executable: /bin/bash

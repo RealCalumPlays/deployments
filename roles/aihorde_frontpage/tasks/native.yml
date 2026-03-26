@@ -1,0 +1,264 @@
+---
+# Native (bare-metal) deployment tasks for AiHordeFrontpage
+# Installs Node.js on the host, builds the Angular app, and runs it
+# directly as a systemd service. No Docker required.
+# When aihorde_frontpage_start_services=false, this file renders service
+# configuration only and skips network/package/build operations.
+
+- name: Install prerequisites for NodeSource
+  ansible.builtin.apt:
+    name:
+      - curl
+      - gnupg
+      - ca-certificates
+      - git
+    state: present
+    update_cache: true
+  become: true
+  when: aihorde_frontpage_start_services | bool
+
+- name: Check if NodeSource GPG key is present
+  ansible.builtin.stat:
+    path: /usr/share/keyrings/nodesource.gpg
+  register: _nodesource_key
+  when: aihorde_frontpage_start_services | bool
+
+- name: Download NodeSource ASCII-armored key
+  ansible.builtin.get_url:
+    url: https://deb.nodesource.com/gpgkey/nodesource-repo.gpg.key
+    dest: /usr/share/keyrings/nodesource-repo.gpg.key
+    mode: "0644"
+  become: true
+  when:
+    - aihorde_frontpage_start_services | bool
+    - not _nodesource_key.stat.exists
+
+- name: Dearmor NodeSource key for apt signed-by
+  ansible.builtin.command:
+    cmd: >-
+      gpg --dearmor --yes --output /usr/share/keyrings/nodesource.gpg
+      /usr/share/keyrings/nodesource-repo.gpg.key
+    creates: /usr/share/keyrings/nodesource.gpg
+  become: true
+  when:
+    - aihorde_frontpage_start_services | bool
+    - not _nodesource_key.stat.exists
+
+- name: Add NodeSource repository
+  ansible.builtin.apt_repository:
+    repo: >-
+      deb [signed-by=/usr/share/keyrings/nodesource.gpg]
+      https://deb.nodesource.com/node_{{ aihorde_frontpage_node_major }}.x
+      nodistro main
+    filename: nodesource
+    state: present
+  become: true
+  when: aihorde_frontpage_start_services | bool
+
+- name: Install Node.js
+  ansible.builtin.apt:
+    name: nodejs
+    state: present
+    update_cache: true
+  become: true
+  when: aihorde_frontpage_start_services | bool
+
+- name: Verify Node.js version
+  ansible.builtin.command: node --version
+  changed_when: false
+  register: _node_version
+  become: true
+  when: aihorde_frontpage_start_services | bool
+
+- name: Display Node.js version
+  ansible.builtin.debug:
+    msg: "Node.js version: {{ _node_version.stdout }}"
+  when: aihorde_frontpage_start_services | bool
+
+- name: Create frontpage group
+  ansible.builtin.group:
+    name: "{{ aihorde_frontpage_group }}"
+    system: true
+    state: present
+  become: true
+  when: aihorde_frontpage_start_services | bool
+
+- name: Create frontpage user
+  ansible.builtin.user:
+    name: "{{ aihorde_frontpage_user }}"
+    group: "{{ aihorde_frontpage_group }}"
+    system: true
+    shell: /usr/sbin/nologin
+    home: "{{ aihorde_frontpage_base_dir }}"
+    create_home: false
+  become: true
+  when: aihorde_frontpage_start_services | bool
+
+- name: Set base directory group for service user access
+  ansible.builtin.file:
+    path: "{{ aihorde_frontpage_base_dir }}"
+    group: "{{ aihorde_frontpage_group }}"
+    mode: "0750"
+  become: true
+  when: aihorde_frontpage_start_services | bool
+
+- name: Clone AiHordeFrontpage source repository
+  ansible.builtin.git:
+    repo: "{{ aihorde_frontpage_repo }}"
+    dest: "{{ aihorde_frontpage_base_dir }}/src"
+    version: "{{ aihorde_frontpage_repo_version }}"
+    force: true
+  become: true
+  register: _frontpage_clone
+  when: aihorde_frontpage_start_services | bool
+
+- name: Check if a previous native build artifact exists
+  ansible.builtin.stat:
+    path: "{{ aihorde_frontpage_base_dir }}/src/dist/ai-horde-website/server/server.mjs"
+  register: _frontpage_built_server
+  when: aihorde_frontpage_start_services | bool
+
+- name: Check stored native build configuration stamp
+  ansible.builtin.stat:
+    path: "{{ aihorde_frontpage_base_dir }}/.native-build-config"
+  register: _frontpage_build_stamp
+  when: aihorde_frontpage_start_services | bool
+
+- name: Read stored native build configuration stamp
+  ansible.builtin.slurp:
+    src: "{{ aihorde_frontpage_base_dir }}/.native-build-config"
+  register: _frontpage_build_stamp_content
+  when:
+    - aihorde_frontpage_start_services | bool
+    - _frontpage_build_stamp.stat.exists
+
+- name: Determine whether native build is required
+  ansible.builtin.set_fact:
+    _frontpage_needs_build: >-
+      {{
+        (aihorde_frontpage_force_build | bool)
+        or (_frontpage_clone.changed | default(false))
+        or (not _frontpage_built_server.stat.exists)
+        or (
+          (_frontpage_build_stamp_content.content | default('') | b64decode | trim)
+          != aihorde_frontpage_build_config
+        )
+      }}
+  when: aihorde_frontpage_start_services | bool
+
+- name: Install npm dependencies
+  ansible.builtin.command:
+    cmd: npm ci
+    chdir: "{{ aihorde_frontpage_base_dir }}/src"
+  become: true
+  changed_when: true
+  when:
+    - aihorde_frontpage_start_services | bool
+    - _frontpage_needs_build | default(false)
+
+- name: Build Angular application
+  ansible.builtin.command:
+    cmd: "npm run build -- --configuration={{ aihorde_frontpage_build_config }}"
+    chdir: "{{ aihorde_frontpage_base_dir }}/src"
+  become: true
+  changed_when: true
+  when:
+    - aihorde_frontpage_start_services | bool
+    - _frontpage_needs_build | default(false)
+
+- name: Create dist directory
+  ansible.builtin.file:
+    path: "{{ aihorde_frontpage_base_dir }}/dist"
+    state: directory
+    owner: "{{ aihorde_frontpage_user }}"
+    group: "{{ aihorde_frontpage_group }}"
+    mode: "0755"
+  become: true
+  when: aihorde_frontpage_start_services | bool
+
+- name: Remove existing dist directory before deploying fresh artifacts
+  ansible.builtin.file:
+    path: "{{ aihorde_frontpage_base_dir }}/dist"
+    state: absent
+  become: true
+  when:
+    - aihorde_frontpage_start_services | bool
+    - _frontpage_needs_build | default(false)
+
+- name: Recreate dist directory for built artifacts
+  ansible.builtin.file:
+    path: "{{ aihorde_frontpage_base_dir }}/dist"
+    state: directory
+    owner: "{{ aihorde_frontpage_user }}"
+    group: "{{ aihorde_frontpage_group }}"
+    mode: "0755"
+  become: true
+  when:
+    - aihorde_frontpage_start_services | bool
+    - _frontpage_needs_build | default(false)
+
+- name: Copy built artifacts to dist directory
+  ansible.builtin.copy:
+    src: "{{ aihorde_frontpage_base_dir }}/src/dist/ai-horde-website/"
+    dest: "{{ aihorde_frontpage_base_dir }}/dist/"
+    remote_src: true
+    owner: "{{ aihorde_frontpage_user }}"
+    group: "{{ aihorde_frontpage_group }}"
+    mode: "u=rwX,g=rX,o="
+    directory_mode: "u=rwx,g=rx,o="
+  when:
+    - aihorde_frontpage_start_services | bool
+    - _frontpage_needs_build | default(false)
+
+- name: Persist native build configuration stamp
+  ansible.builtin.copy:
+    dest: "{{ aihorde_frontpage_base_dir }}/.native-build-config"
+    content: "{{ aihorde_frontpage_build_config }}\n"
+    owner: root
+    group: root
+    mode: "0644"
+  become: true
+  when:
+    - aihorde_frontpage_start_services | bool
+    - _frontpage_needs_build | default(false)
+
+- name: Set ownership on dist directory
+  ansible.builtin.file:
+    path: "{{ aihorde_frontpage_base_dir }}/dist"
+    state: directory
+    recurse: true
+    owner: "{{ aihorde_frontpage_user }}"
+    group: "{{ aihorde_frontpage_group }}"
+  become: true
+  when: aihorde_frontpage_start_services | bool
+
+- name: Template systemd service for AiHordeFrontpage (native)
+  ansible.builtin.template:
+    src: frontpage-native.service.j2
+    dest: /etc/systemd/system/aihorde-frontpage.service
+    mode: "0644"
+  become: true
+  notify:
+    - Reload systemd
+    - Restart AiHordeFrontpage native
+
+- name: Enable and start AiHordeFrontpage service
+  ansible.builtin.systemd:
+    name: aihorde-frontpage
+    enabled: true
+    state: started
+    daemon_reload: true
+  become: true
+  when: aihorde_frontpage_start_services | bool
+
+- name: Wait for AiHordeFrontpage to respond
+  ansible.builtin.uri:
+    url: "http://127.0.0.1:{{ aihorde_frontpage_port }}/"
+    method: GET
+    status_code: 200
+  register: _frontpage_ready
+  until: _frontpage_ready.status == 200
+  retries: 30
+  delay: 5
+  become: true
+  when: aihorde_frontpage_start_services | bool

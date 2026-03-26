@@ -1,0 +1,25 @@
+---
+# Handlers for aihorde_frontpage role
+
+- name: Reload systemd
+  ansible.builtin.systemd:
+    daemon_reload: true
+  become: true
+  when: aihorde_frontpage_start_services | bool
+
+- name: Restart AiHordeFrontpage stack
+  ansible.builtin.shell: >
+    docker compose build &&
+    docker compose up -d
+  args:
+    chdir: "{{ aihorde_frontpage_base_dir }}"
+  become: true
+  changed_when: true
+  when: aihorde_frontpage_start_services | bool and aihorde_frontpage_deploy_mode == 'docker'
+
+- name: Restart AiHordeFrontpage native
+  ansible.builtin.systemd:
+    name: aihorde-frontpage
+    state: restarted
+  become: true
+  when: aihorde_frontpage_start_services | bool and aihorde_frontpage_deploy_mode == 'native'
