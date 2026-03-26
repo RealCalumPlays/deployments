@@ -1,0 +1,182 @@
+---
+# Test playbook: horde_regen_worker role — template rendering only.
+#
+# Renders bridgeData.yaml and the systemd service unit using the role's
+# templates and defaults, then asserts on the generated file contents.
+#
+# We load the role's defaults via include_vars so we only override the
+# variables we want to test.  This keeps the test resilient to new
+# defaults being added to the role.
+
+- name: Test regen worker template rendering (positive)
+  hosts: testhost
+  become: true
+  vars:
+    # Override key variables for assertion
+    worker_username: "testworker"
+    worker_clone_dir: "horde-worker-regen"
+    worker_runtime_dir: "horde-worker-regen"
+    worker_service_name: "ai_horde_worker"
+    worker_environment: ""
+    amd_gpu: false
+    models_dir: "regen_worker_models"
+    horde_url: "https://aihorde.net"
+    api_key: "test-api-key-12345"
+    priority_usernames: ["priority_user"]
+    max_threads: 1
+    queue_size: 1
+    max_batch: 1
+    max_power: 8
+    allow_unsafe_ip: true
+    require_upfront_kudos: false
+    dreamer_name: "test-dreamer"
+    blacklist: []
+    nsfw: false
+    censor_nsfw: false
+    censorlist: []
+    allow_img2img: true
+    allow_painting: true
+    allow_controlnet: true
+    allow_sdxl_controlnet: false
+    allow_lora: true
+    max_lora_cache_size: 10
+    allow_post_processing: true
+    safety_on_gpu: false
+    dynamic_models: false
+    number_of_dynamic_models: 0
+    max_models_to_download: 10
+    stats_output_frequency: 30
+    moderate_performance_mode: false
+    high_performance_mode: false
+    exit_on_unhandled_faults: true
+    scribe_name: "test-scribe"
+    kai_url: "http://localhost:5000"
+    max_length: 80
+    max_context_length: 1024
+    branded_model: true
+    alchemist_name: "test-alchemist"
+    forms:
+      - "caption"
+      - "nsfw"
+      - "interrogation"
+      - "post-process"
+    models_to_load:
+      - "stable_diffusion"
+      - "TOP 2"
+    models_to_skip:
+      - "pix2pix"
+
+  tasks:
+    - name: Create worker home directory
+      ansible.builtin.file:
+        path: "/home/{{ worker_username }}/{{ worker_runtime_dir }}"
+        state: directory
+        mode: "0755"
+
+    - name: Template bridgeData.yaml
+      ansible.builtin.template:
+        src: "../../roles/horde_regen_worker/templates/bridgeData.yaml.j2"
+        dest: "/home/{{ worker_username }}/{{ worker_runtime_dir }}/bridgeData.yaml"
+        mode: "0600"
+
+    - name: Read bridgeData.yaml
+      ansible.builtin.slurp:
+        src: "/home/{{ worker_username }}/{{ worker_runtime_dir }}/bridgeData.yaml"
+      register: _bridge
+
+    - name: Assert bridgeData has correct horde_url
+      ansible.builtin.assert:
+        that:
+          - "'horde_url: https://aihorde.net' in _bridge.content | b64decode"
+
+    - name: Assert bridgeData has correct api_key
+      ansible.builtin.assert:
+        that:
+          - "'api_key: test-api-key-12345' in _bridge.content | b64decode"
+
+    - name: Assert bridgeData has models configuration
+      ansible.builtin.assert:
+        that:
+          - "'stable_diffusion' in _bridge.content | b64decode"
+          - "'TOP 2' in _bridge.content | b64decode"
+          - "'pix2pix' in _bridge.content | b64decode"
+
+    - name: Assert bridgeData has worker name
+      ansible.builtin.assert:
+        that:
+          - "'dreamer_name: test-dreamer' in _bridge.content | b64decode"
+
+    - name: Assert bridgeData has feature toggles
+      ansible.builtin.assert:
+        that:
+          - "'nsfw: False' in _bridge.content | b64decode"
+          - "'allow_img2img: True' in _bridge.content | b64decode"
+          - "'allow_controlnet: True' in _bridge.content | b64decode"
+          - "'allow_lora:  True' in _bridge.content | b64decode"
+
+    - name: Assert bridgeData has cache_home with correct path
+      ansible.builtin.assert:
+        that:
+          - "'cache_home: /home/testworker/regen_worker_models' in _bridge.content | b64decode"
+
+    - name: Assert bridgeData has scribe and alchemist config
+      ansible.builtin.assert:
+        that:
+          - "'scribe_name: test-scribe' in _bridge.content | b64decode"
+          - "'alchemist_name: test-alchemist' in _bridge.content | b64decode"
+          - "'kai_url: http://localhost:5000' in _bridge.content | b64decode"
+
+    - name: Assert bridgeData has terminal UI disabled
+      ansible.builtin.assert:
+        that:
+          - "'disable_terminal_ui: true' in _bridge.content | b64decode"
+
+    - name: Template systemd service unit
+      ansible.builtin.template:
+        src: "../../roles/horde_regen_worker/templates/ai_horde_worker.j2"
+        dest: "/tmp/ai_horde_worker_nvidia.service"
+        mode: "0644"
+
+    - name: Read systemd service unit
+      ansible.builtin.slurp:
+        src: "/tmp/ai_horde_worker_nvidia.service"
+      register: _service
+
+    - name: Assert systemd unit has correct fields (NVIDIA)
+      ansible.builtin.assert:
+        that:
+          - "'WorkingDirectory=' in _service.content | b64decode"
+          - "'/home/testworker/horde-worker-regen' in _service.content | b64decode"
+          - "'horde-bridge.sh' in _service.content | b64decode"
+          - "'Restart=always' in _service.content | b64decode"
+          - "'KillSignal=SIGINT' in _service.content | b64decode"
+          - "'RestartSec=15' in _service.content | b64decode"
+          - "'TimeoutStopSec=120' in _service.content | b64decode"
+
+    - name: Assert NVIDIA unit does NOT use rocm bridge
+      ansible.builtin.assert:
+        that:
+          - "'horde-bridge-rocm.sh' not in _service.content | b64decode"
+
+    - name: Template systemd service unit (AMD)
+      ansible.builtin.template:
+        src: "../../roles/horde_regen_worker/templates/ai_horde_worker.j2"
+        dest: "/tmp/ai_horde_worker_amd.service"
+        mode: "0644"
+      vars:
+        amd_gpu: true
+
+    - name: Read AMD service unit
+      ansible.builtin.slurp:
+        src: /tmp/ai_horde_worker_amd.service
+      register: _amd_service
+
+    - name: Assert AMD unit uses rocm bridge script
+      ansible.builtin.assert:
+        that:
+          - "'horde-bridge-rocm.sh' in _amd_service.content | b64decode"
+
+    - name: Assert AMD unit does NOT use standard bridge
+      ansible.builtin.assert:
+        that:
+          - "'horde-bridge.sh' not in _amd_service.content | b64decode"

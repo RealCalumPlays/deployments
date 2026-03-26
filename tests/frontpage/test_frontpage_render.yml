@@ -1,0 +1,211 @@
+---
+# idempotency: skip
+# Render-only test: validates AiHordeFrontpage role output without Docker.
+# Safe for CI — no containers started, no network access needed.
+# Tests both Docker and Native deployment modes.
+
+- name: Render AiHordeFrontpage configs (Docker mode)
+  hosts: localhost
+  connection: local
+  gather_facts: false
+  vars:
+    aihorde_frontpage_start_services: false
+    aihorde_frontpage_deploy_mode: docker
+    aihorde_frontpage_base_dir: /tmp/frontpage-test-docker
+    aihorde_frontpage_build_config: local
+    aihorde_frontpage_allowed_hosts:
+      - localhost
+      - 127.0.0.1
+      - stablehorde.net
+  tasks:
+    - name: Create mock source directory
+      ansible.builtin.file:
+        path: "{{ aihorde_frontpage_base_dir }}/src"
+        state: directory
+        mode: "0755"
+
+    - name: Run aihorde_frontpage role (Docker mode)
+      ansible.builtin.include_role:
+        name: aihorde_frontpage
+      vars:
+        aihorde_frontpage_start_services: false
+
+  post_tasks:
+    - name: Assert docker-compose.yml exists
+      ansible.builtin.stat:
+        path: "{{ aihorde_frontpage_base_dir }}/docker-compose.yml"
+      register: compose_file
+    - name: Verify docker-compose.yml exists
+      ansible.builtin.assert:
+        that: compose_file.stat.exists
+
+    - name: Read compose file
+      ansible.builtin.slurp:
+        path: "{{ aihorde_frontpage_base_dir }}/docker-compose.yml"
+      register: compose_content
+
+    - name: Assert compose has BUILD_CONFIG
+      ansible.builtin.assert:
+        that:
+          - "'BUILD_CONFIG' in (compose_content.content | b64decode)"
+          - "'local' in (compose_content.content | b64decode)"
+        fail_msg: "Compose file missing BUILD_CONFIG or local value"
+
+    - name: Assert compose has healthcheck
+      ansible.builtin.assert:
+        that: "'healthcheck' in (compose_content.content | b64decode)"
+        fail_msg: "Compose file missing healthcheck"
+
+    - name: Assert compose has port 8006
+      ansible.builtin.assert:
+        that: "'8006' in (compose_content.content | b64decode)"
+        fail_msg: "Compose file not using port 8006"
+
+    - name: Assert compose has log rotation
+      ansible.builtin.assert:
+        that: "'max-size' in (compose_content.content | b64decode)"
+        fail_msg: "Compose file missing log rotation"
+
+    - name: Assert .env exists
+      ansible.builtin.stat:
+        path: "{{ aihorde_frontpage_base_dir }}/.env"
+      register: env_file
+    - name: Verify .env exists
+      ansible.builtin.assert:
+        that: env_file.stat.exists
+
+    - name: Read .env file
+      ansible.builtin.slurp:
+        path: "{{ aihorde_frontpage_base_dir }}/.env"
+      register: env_content
+
+    - name: Assert .env has PORT=8006
+      ansible.builtin.assert:
+        that: "'PORT=8006' in (env_content.content | b64decode)"
+        fail_msg: ".env file missing PORT=8006"
+
+    - name: Assert .env has NODE_ENV=production
+      ansible.builtin.assert:
+        that: "'NODE_ENV=production' in (env_content.content | b64decode)"
+        fail_msg: ".env file missing NODE_ENV=production"
+
+    - name: Assert .env renders NG_ALLOWED_HOSTS
+      ansible.builtin.assert:
+        that:
+          - "'NG_ALLOWED_HOSTS=localhost,127.0.0.1,stablehorde.net' in (env_content.content | b64decode)"
+        fail_msg: ".env file missing configured NG_ALLOWED_HOSTS"
+
+    - name: Assert systemd unit exists
+      ansible.builtin.stat:
+        path: /etc/systemd/system/aihorde-frontpage.service
+      register: systemd_unit
+    - name: Verify Docker mode systemd unit exists
+      ansible.builtin.assert:
+        that: systemd_unit.stat.exists
+
+    - name: Read systemd unit
+      ansible.builtin.slurp:
+        path: /etc/systemd/system/aihorde-frontpage.service
+      register: systemd_content
+
+    - name: Assert systemd unit has TimeoutStartSec=600
+      ansible.builtin.assert:
+        that: "'TimeoutStartSec=600' in (systemd_content.content | b64decode)"
+        fail_msg: "systemd unit missing TimeoutStartSec=600"
+
+    - name: Assert systemd unit has ExecStartPre with docker compose build
+      ansible.builtin.assert:
+        that: "'docker compose build' in (systemd_content.content | b64decode)"
+        fail_msg: "systemd unit missing ExecStartPre docker compose build"
+
+    - name: Clean up Docker test directory
+      ansible.builtin.file:
+        path: "{{ aihorde_frontpage_base_dir }}"
+        state: absent
+
+- name: Render AiHordeFrontpage configs (Native mode)
+  hosts: localhost
+  connection: local
+  gather_facts: false
+  vars:
+    aihorde_frontpage_start_services: false
+    aihorde_frontpage_deploy_mode: native
+    aihorde_frontpage_base_dir: /tmp/frontpage-test-native
+    aihorde_frontpage_build_config: production
+  tasks:
+    - name: Create mock source directory
+      ansible.builtin.file:
+        path: "{{ aihorde_frontpage_base_dir }}/src"
+        state: directory
+        mode: "0755"
+
+    - name: Run aihorde_frontpage role (Native mode)
+      ansible.builtin.include_role:
+        name: aihorde_frontpage
+      vars:
+        aihorde_frontpage_start_services: false
+
+  post_tasks:
+    - name: Assert docker-compose.yml does NOT exist (native mode)
+      ansible.builtin.stat:
+        path: "{{ aihorde_frontpage_base_dir }}/docker-compose.yml"
+      register: native_compose_file
+    - name: Verify native mode skips docker-compose.yml
+      ansible.builtin.assert:
+        that: not native_compose_file.stat.exists
+        fail_msg: "docker-compose.yml should not exist in native mode"
+
+    - name: Assert .env exists (native mode)
+      ansible.builtin.stat:
+        path: "{{ aihorde_frontpage_base_dir }}/.env"
+      register: native_env_file
+    - name: Verify native mode .env exists
+      ansible.builtin.assert:
+        that: native_env_file.stat.exists
+
+    - name: Read .env file (native mode)
+      ansible.builtin.slurp:
+        path: "{{ aihorde_frontpage_base_dir }}/.env"
+      register: native_env_content
+
+    - name: Assert .env has PORT=8006 (native mode)
+      ansible.builtin.assert:
+        that: "'PORT=8006' in (native_env_content.content | b64decode)"
+        fail_msg: ".env file missing PORT=8006 in native mode"
+
+    - name: Assert systemd unit exists (native mode)
+      ansible.builtin.stat:
+        path: /etc/systemd/system/aihorde-frontpage.service
+      register: native_systemd_unit
+    - name: Verify native mode systemd unit exists
+      ansible.builtin.assert:
+        that: native_systemd_unit.stat.exists
+
+    - name: Read systemd unit (native mode)
+      ansible.builtin.slurp:
+        path: /etc/systemd/system/aihorde-frontpage.service
+      register: native_systemd_content
+
+    - name: Assert native systemd unit runs node directly
+      ansible.builtin.assert:
+        that:
+          - "'node server/server.mjs' in (native_systemd_content.content | b64decode)"
+          - "'Type=simple' in (native_systemd_content.content | b64decode)"
+        fail_msg: "Native systemd unit should run node directly with Type=simple"
+
+    - name: Assert native systemd unit has security hardening
+      ansible.builtin.assert:
+        that:
+          - "'NoNewPrivileges=true' in (native_systemd_content.content | b64decode)"
+          - "'ProtectSystem=strict' in (native_systemd_content.content | b64decode)"
+        fail_msg: "Native systemd unit missing security hardening"
+
+    - name: Assert native systemd unit does NOT reference docker
+      ansible.builtin.assert:
+        that: "'docker' not in (native_systemd_content.content | b64decode)"
+        fail_msg: "Native systemd unit should not reference Docker"
+
+    - name: Clean up Native test directory
+      ansible.builtin.file:
+        path: "{{ aihorde_frontpage_base_dir }}"
+        state: absent

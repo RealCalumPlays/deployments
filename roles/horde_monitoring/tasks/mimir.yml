@@ -260,3 +260,40 @@
     - mimir_backup_enabled | bool
     - mimir_enable_minio | bool
     - monitoring_start_services | bool
+
+- name: Verify backup target is reachable
+  ansible.builtin.command: >
+    docker run --rm --network host
+    {{ minio_mc_image }}
+    /bin/sh -c "
+      mc alias set remote {{ mimir_backup_target_endpoint }}
+        {{ mimir_backup_target_access_key }}
+        {{ mimir_backup_target_secret_key }}
+        {{ '--insecure' if (mimir_backup_target_insecure | bool) else '' }} &&
+      mc ls remote/{{ mimir_backup_target_bucket }}-blocks 2>/dev/null;
+      exit 0
+    "
+  become: true
+  changed_when: false
+  register: _backup_target_check
+  failed_when: false
+  when:
+    - mimir_backup_enabled | bool
+    - mimir_enable_minio | bool
+    - monitoring_start_services | bool
+    - mimir_backup_target_endpoint | length > 0
+
+- name: Warn if backup target is unreachable
+  ansible.builtin.debug:
+    msg: >-
+      WARNING: Backup target connectivity check failed. The backup timer
+      is enabled but the first backup run may fail. Verify that
+      mimir_backup_target_endpoint ({{ mimir_backup_target_endpoint }})
+      is reachable and credentials are correct. Error:
+      {{ _backup_target_check.stderr | default('(no error output)') }}
+  when:
+    - mimir_backup_enabled | bool
+    - mimir_enable_minio | bool
+    - monitoring_start_services | bool
+    - mimir_backup_target_endpoint | length > 0
+    - _backup_target_check.rc | default(0) != 0

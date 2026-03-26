@@ -34,7 +34,6 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
-  # ── Lint ────────────────────────────────────────────────────────────
   lint:
     name: Lint (YAML + Ansible)
     runs-on: ubuntu-latest
@@ -56,7 +55,6 @@ jobs:
       - name: ansible-lint
         run: ansible-lint roles/ tests/test_*.yml examples/
 
-  # ── Template rendering / config assertion tests ────────────────────
   integration:
     name: Integration tests
     # Only run on push (not fork PRs) — uses --privileged containers.
@@ -97,7 +95,6 @@ jobs:
           docker image inspect horde-test-systemd >/dev/null 2>&1 && \
             docker save horde-test-systemd -o /tmp/test-image.tar || true
 
-  # ── Syntax + render validation on PRs (non-privileged) ──────────────
   render-check:
     name: Render check (PR)
     if: github.event_name == 'pull_request'

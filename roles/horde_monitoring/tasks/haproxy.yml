@@ -22,6 +22,15 @@
   register: _haproxy_config
   become: true
 
+- name: Warn if HAProxy config not found
+  ansible.builtin.fail:
+    msg: >-
+      monitoring_configure_haproxy is true but {{ haproxy_config_path }}
+      does not exist. HAProxy must be installed and configured before this
+      role can inject monitoring backends. Install HAProxy first, or set
+      monitoring_configure_haproxy: false to skip.
+  when: not _haproxy_config.stat.exists
+
 - name: Create permanent timestamped backup
   ansible.builtin.copy:
     src: "{{ haproxy_config_path }}"
@@ -29,7 +38,6 @@
     remote_src: true
     mode: "0644"
   become: true
-  when: _haproxy_config.stat.exists
 
 - name: Create temporary working file for HAProxy config
   ansible.builtin.tempfile:
@@ -39,7 +47,6 @@
     suffix: .cfg
   register: _haproxy_working_file
   become: true
-  when: _haproxy_config.stat.exists
 
 - name: Create working copy of HAProxy config
   ansible.builtin.copy:
@@ -48,12 +55,12 @@
     remote_src: true
     mode: "0644"
   become: true
-  when: _haproxy_config.stat.exists
 
 - name: Build monitoring backends block content
   ansible.builtin.set_fact:
-    _haproxy_backends_block: >-
+    _haproxy_backends_lines: >-
       {{
+        (
         [
           'backend grafana_backend',
           '    balance leastconn',
@@ -64,6 +71,7 @@
           '    balance leastconn',
           '    timeout queue 30s',
           '    retries 3',
+          '    option httpchk',
           '    option forwardfor if-none',
           '    server mimir_local 127.0.0.1:' ~ mimir_port ~ ' check observe layer7',
           '    http-check expect ! rstatus ^5',
@@ -75,6 +83,7 @@
             '    balance leastconn',
             '    timeout queue 30s',
             '    retries 3',
+            '    option httpchk',
             '    option forwardfor if-none',
             '    server loki_local 127.0.0.1:' ~ loki_port ~ ' check observe layer7',
             '    http-check expect ! rstatus ^5',
@@ -91,8 +100,11 @@
             '    server tempo_local 127.0.0.1:' ~ tempo_otlp_http_port ~ ' check',
           ] if (monitoring_install_tempo | bool) else []
         )
-      | join('\n') }}
-  when: _haproxy_config.stat.exists
+        ) }}
+
+- name: Join backends into multi-line block
+  ansible.builtin.set_fact:
+    _haproxy_backends_block: "{{ _haproxy_backends_lines | join('\n') }}"
 
 - name: Insert monitoring backends into working copy
   ansible.builtin.blockinfile:
@@ -100,36 +112,14 @@
     marker: "# {mark} ANSIBLE MANAGED - MONITORING BACKENDS"
     block: "{{ _haproxy_backends_block }}"
   become: true
-  when: _haproxy_config.stat.exists
   register: _haproxy_modified
+  notify: Validate and promote HAProxy config
 
-- name: Validate working copy with HAProxy config checker
-  ansible.builtin.command: haproxy -c -f {{ _haproxy_working_file.path }}
-  become: true
-  register: _haproxy_validation
-  changed_when: false
-  when:
-    - _haproxy_config.stat.exists
-    - _haproxy_modified.changed
-
-- name: Promote validated config to live
-  ansible.builtin.copy:
-    src: "{{ _haproxy_working_file.path }}"
-    dest: "{{ haproxy_config_path }}"
-    remote_src: true
-    mode: "0644"
-  become: true
-  when:
-    - _haproxy_config.stat.exists
-    - _haproxy_modified.changed
-    - _haproxy_validation.rc == 0
-  notify: Reload haproxy
+- name: Run pending handlers before cleanup
+  ansible.builtin.meta: flush_handlers
 
 - name: Clean up working copy
   ansible.builtin.file:
     path: "{{ _haproxy_working_file.path }}"
     state: absent
   become: true
-  when:
-    - _haproxy_config.stat.exists
-    - _haproxy_working_file.path is defined

@@ -1,4 +1,5 @@
 ---
+# idempotency: skip
 # Test playbook: Grafana Alloy role (config rendering only, no service start)
 - name: Test horde_alloy - Config rendering
   hosts: testhost
@@ -89,7 +90,7 @@
 
     - name: Deploy Alloy configuration (template only)
       ansible.builtin.template:
-        src: "{{ playbook_dir }}/../roles/horde_alloy/templates/config.alloy.j2"
+        src: "{{ playbook_dir }}/../../roles/horde_alloy/templates/config.alloy.j2"
         dest: "{{ alloy_config_dir | default('/etc/alloy') }}/config.alloy"
         owner: alloy
         group: alloy
@@ -97,7 +98,7 @@
 
     - name: Deploy Alloy environment file
       ansible.builtin.template:
-        src: "{{ playbook_dir }}/../roles/horde_alloy/templates/alloy.env.j2"
+        src: "{{ playbook_dir }}/../../roles/horde_alloy/templates/alloy.env.j2"
         dest: /etc/default/alloy
         owner: root
         group: root
@@ -168,8 +169,8 @@
     - name: Assert Docker log collection is NOT present when disabled
       ansible.builtin.assert:
         that:
-          - "'loki.source.docker \"containers\"' not in (alloy_config.content | b64decode)"
-          - "'discovery.docker \"containers\"' not in (alloy_config.content | b64decode)"
+          - '''loki.source.docker "containers"'' not in (alloy_config.content | b64decode)'
+          - '''discovery.docker "containers"'' not in (alloy_config.content | b64decode)'
         fail_msg: "Docker log collection should not appear when alloy_collect_docker_logs is false"
 
     - name: Stat config file permissions
@@ -243,7 +244,7 @@
   tasks:
     - name: Deploy Alloy configuration (metrics only)
       ansible.builtin.template:
-        src: "{{ playbook_dir }}/../roles/horde_alloy/templates/config.alloy.j2"
+        src: "{{ playbook_dir }}/../../roles/horde_alloy/templates/config.alloy.j2"
         dest: "{{ alloy_config_dir | default('/etc/alloy') }}/config.alloy"
         owner: alloy
         group: alloy
@@ -263,10 +264,10 @@
     - name: Assert log and trace pipelines are NOT present
       ansible.builtin.assert:
         that:
-          - "'loki.source.journal \"systemd\"' not in (alloy_metrics_only.content | b64decode)"
-          - "'loki.write \"loki\"' not in (alloy_metrics_only.content | b64decode)"
-          - "'otelcol.receiver.otlp \"local\"' not in (alloy_metrics_only.content | b64decode)"
-          - "'otelcol.exporter.otlphttp \"tempo\"' not in (alloy_metrics_only.content | b64decode)"
+          - '''loki.source.journal "systemd"'' not in (alloy_metrics_only.content | b64decode)'
+          - '''loki.write "loki"'' not in (alloy_metrics_only.content | b64decode)'
+          - '''otelcol.receiver.otlp "local"'' not in (alloy_metrics_only.content | b64decode)'
+          - '''otelcol.exporter.otlphttp "tempo"'' not in (alloy_metrics_only.content | b64decode)'
         fail_msg: "Log and trace pipelines should not appear when disabled"
 
     - name: Assert no basic_auth block when username is empty

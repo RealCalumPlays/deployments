@@ -1,4 +1,5 @@
 ---
+# idempotency: skip
 # Test playbook: Mimir-only deployment (no Grafana)
 - name: Test horde_monitoring - Mimir only (no Grafana)
   hosts: testhost

@@ -2,7 +2,7 @@
 # Local deployment playbook — renders the full monitoring stack config
 # into local-deploy/ for manual validation via Docker Compose.
 #
-# This playbook is driven by tests/local_deploy.sh — do not run directly.
+# This playbook is driven by tests/monitoring/local_deploy.sh — do not run directly.
 # It applies the horde_monitoring role against localhost with
 # monitoring_start_services=false so that only configs are rendered
 # (no systemd units are enabled/started).
@@ -16,12 +16,11 @@
   hosts: localhost
   connection: local
   become: true
-  gather_facts: yes
+  gather_facts: true
 
   vars:
-    _local_root: "{{ playbook_dir }}/../local-deploy"
+    _local_root: "{{ playbook_dir }}/../../local-deploy"
 
-    # ── Component flags ──────────────────────────────────────────
     monitoring_install_mimir: true
     monitoring_install_grafana: true
     monitoring_install_loki: true
@@ -31,7 +30,6 @@
     monitoring_configure_firewall: false
     monitoring_start_services: false # script starts compose directly
 
-    # ── Redirect all paths into local-deploy/ ────────────────────
     mimir_config_dir: "{{ _local_root }}/mimir/config"
     mimir_data_dir: "{{ _local_root }}/mimir/data"
     mimir_compose_dir: "{{ _local_root }}/compose"
@@ -45,7 +43,6 @@
     pyroscope_config_dir: "{{ _local_root }}/pyroscope/config"
     pyroscope_data_dir: "{{ _local_root }}/pyroscope/data"
 
-    # ── Sensible local defaults ──────────────────────────────────
     grafana_admin_password: "localdev"
     grafana_anonymous_enabled: true
     grafana_provision_dashboards: true
@@ -70,7 +67,6 @@
     # Redirect alerting rules into local-deploy so they can be mounted
     monitoring_alerting_rules_dir: "{{ _local_root }}/prometheus/rules"
 
-    # ── Local-deploy-only variables (consumed by tests/templates/) ─
     # Ports for services that the shell script manages
     _local_prometheus_port: 9090
     _local_alertmanager_port: 9093
@@ -92,10 +88,9 @@
   roles:
     - role: horde_monitoring
 
-  # ── Render configs outside the role's scope ────────────────────
   post_tasks:
     - name: Create local-deploy subdirectories
-      file:
+      ansible.builtin.file:
         path: "{{ item }}"
         state: directory
         mode: "0755"
@@ -106,37 +101,37 @@
         - "{{ _local_root }}/alloy"
 
     - name: Render Prometheus config
-      template:
+      ansible.builtin.template:
         src: local-deploy/prometheus.yml.j2
         dest: "{{ _local_root }}/prometheus/prometheus.yml"
         mode: "0644"
 
     - name: Render Alertmanager config
-      template:
+      ansible.builtin.template:
         src: local-deploy/alertmanager.yml.j2
         dest: "{{ _local_root }}/alertmanager/alertmanager.yml"
         mode: "0644"
 
     - name: Render exporter config
-      template:
+      ansible.builtin.template:
         src: local-deploy/exporter-config.yaml.j2
         dest: "{{ _local_root }}/exporter/config.yaml"
         mode: "0644"
 
     - name: Render Alloy config
-      template:
+      ansible.builtin.template:
         src: local-deploy/alloy-config.alloy.j2
         dest: "{{ _local_root }}/alloy/config.alloy"
         mode: "0644"
 
     - name: Render Docker Compose overlay
-      template:
+      ansible.builtin.template:
         src: local-deploy/docker-compose.local.yml.j2
         dest: "{{ mimir_compose_dir }}/docker-compose.local.yml"
         mode: "0644"
 
     - name: Render local-deploy.env
-      template:
+      ansible.builtin.template:
         src: local-deploy/local-deploy.env.j2
         dest: "{{ _local_root }}/local-deploy.env"
         mode: "0644"

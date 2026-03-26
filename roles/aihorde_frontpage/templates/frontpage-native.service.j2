@@ -1,0 +1,24 @@
+[Unit]
+Description=AiHordeFrontpage (Native Node.js)
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+WorkingDirectory={{ aihorde_frontpage_base_dir }}/dist
+EnvironmentFile={{ aihorde_frontpage_base_dir }}/.env
+ExecStart=/usr/bin/node server/server.mjs
+Restart=on-failure
+RestartSec=5s
+User={{ aihorde_frontpage_user }}
+Group={{ aihorde_frontpage_group }}
+
+# Security hardening
+NoNewPrivileges=true
+ProtectSystem=strict
+ProtectHome=true
+ReadWritePaths={{ aihorde_frontpage_base_dir }}
+PrivateTmp=true
+
+[Install]
+WantedBy=multi-user.target

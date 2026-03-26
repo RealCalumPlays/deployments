@@ -1,4 +1,8 @@
 ---
+# Example playbook for deploying a regen worker.
+# The worker connects to an AI-Horde backend via `horde_url` in bridgeData.yaml.
+# Deploy the ai_horde role first (see full_horde_stack.yml for a combined example).
+
 - name: Deploy regen worker
   hosts: regen_server
 

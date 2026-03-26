@@ -1,0 +1,50 @@
+---
+# AiHordeFrontpage deployment defaults
+
+# "docker" — build and run inside a Docker container (default).
+# "native" — install Node.js on the host, build and run directly.
+#             Requires a Debian/Ubuntu host. No Docker needed.
+aihorde_frontpage_deploy_mode: "docker"
+
+aihorde_frontpage_repo: "https://github.com/Haidra-Org/AiHordeFrontpage.git"
+aihorde_frontpage_repo_version: "master"
+
+aihorde_frontpage_base_dir: "/opt/aihorde-frontpage"
+
+# Host-side port to publish. The container always listens on 8006
+# internally (set by the Dockerfile's PORT env var).
+# Matches production HAProxy backend (port 8006).
+aihorde_frontpage_port: 8006
+
+# Address to bind on the host. Default: loopback only.
+aihorde_frontpage_listen: "127.0.0.1"
+
+# Allowed Host header values for Angular SSR.
+# Include your public domain(s) when deploying behind a reverse proxy.
+aihorde_frontpage_allowed_hosts:
+  - localhost
+  - 127.0.0.1
+  - ::1
+
+# Angular build configuration name. Determines which environment.ts
+# file is swapped via fileReplacements in angular.json.
+# Values: production, development, local
+aihorde_frontpage_build_config: "production"
+
+aihorde_frontpage_log_driver: "local"
+aihorde_frontpage_log_max_size: "50m"
+aihorde_frontpage_log_max_file: 5
+
+# Set to false in CI/test environments to skip service
+# startup and health-check waits. All configs are still rendered.
+aihorde_frontpage_start_services: true
+
+# Force a docker build even if the image already exists locally.
+aihorde_frontpage_force_build: false
+
+# System user/group for the Node.js process (native mode only).
+aihorde_frontpage_user: "aihorde-frontpage"
+aihorde_frontpage_group: "aihorde-frontpage"
+
+# Node.js major version to install from NodeSource (native mode).
+aihorde_frontpage_node_major: 24
