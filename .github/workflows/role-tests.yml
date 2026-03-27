@@ -1,3 +1,14 @@
+# Per-suite role tests for haidra.deployments collection.
+#
+# Security model:
+#   - render-check (PRs): lightweight ansible-playbook --syntax-check only.
+#     No Docker, no --privileged. Safe for fork PRs.
+#   - render (push/dispatch): full run_tests.sh with --privileged systemd
+#     containers. Restricted to trusted events only.
+#   - integration-smoke: runs after whichever gate job succeeded.
+#   - integration-live: manual workflow_dispatch only.
+#   - Enable "Require approval for all outside collaborators" in repo
+#     Settings → Actions for defense-in-depth.
 ---
 name: Role Tests
 
@@ -16,8 +27,48 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
+  # Lightweight syntax-check for PRs — no Docker, no --privileged.
+  render-check:
+    name: "render-check / ${{ matrix.suite }}"
+    if: github.event_name == 'pull_request'
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    strategy:
+      fail-fast: false
+      matrix:
+        suite:
+          - monitoring
+          - ai_horde
+          - regen_worker
+          - artbot
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Install Ansible
+        run: pip install ansible
+
+      - name: Install galaxy dependencies
+        run: ansible-galaxy collection install -r examples/requirements.yml
+
+      - name: Syntax check test playbooks
+        run: |
+          shopt -s globstar
+          for pb in tests/${{ matrix.suite }}/test_*.yml; do
+            echo "--- Syntax-checking $pb ---"
+            ansible-playbook --syntax-check "$pb" -i tests/inventory_docker.ini
+          done
+
+  # Full render via run_tests.sh (--privileged containers).
+  # Restricted to push/dispatch — fork PRs cannot trigger this.
   render:
     name: "render / ${{ matrix.suite }}"
+    if: github.event_name != 'pull_request'
     runs-on: ubuntu-latest
     strategy:
       fail-fast: false
@@ -55,6 +106,7 @@ jobs:
 
   integration-smoke:
     name: integration / smoke
+    if: github.event_name != 'pull_request'
     runs-on: ubuntu-latest
     needs: render
 
