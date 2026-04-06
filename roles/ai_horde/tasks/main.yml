@@ -1,33 +1,29 @@
 ---
-# Deploy AI-Horde backend (Flask + PostgreSQL + Redis) via Docker Compose
-# Task flow: validate → clone source → create dirs → template configs → systemd → wait
+# Deploy AI-Horde backend
+# Supports two deploy modes:
+#   docker — Docker Compose: AI-Horde + bundled PostgreSQL + Redis (default)
+#   native — Bare-metal: Python venv + systemd template instances
+#
+# Task flow: validate → mode dispatch → optional services → health checks
 
-- name: Verify Docker is available
-  ansible.builtin.command: docker --version
-  changed_when: false
-  failed_when: false
-  register: _docker_check
-  become: true
+- name: Validate deploy mode
+  ansible.builtin.assert:
+    that:
+      - ai_horde_deploy_mode in ['docker', 'native']
+    fail_msg: >-
+      Invalid ai_horde_deploy_mode '{{ ai_horde_deploy_mode }}'.
+      Must be 'docker' or 'native'.
 
-- name: Fail if Docker is not installed
-  ansible.builtin.fail:
-    msg: "Docker is required for the AI-Horde backend. Please install Docker first."
-  when: _docker_check.rc != 0
-
-- name: Verify Docker Compose V2 is available
-  ansible.builtin.command: docker compose version
-  changed_when: false
-  failed_when: _compose_check.rc != 0
-  register: _compose_check
-  become: true
-
-- name: Fail if Docker Compose V2 is not available
-  ansible.builtin.fail:
-    msg: >-
-      Docker Compose V2 plugin is required but 'docker compose version' failed.
-      The standalone docker-compose (V1) is end-of-life. Please install the
-      Docker Compose V2 plugin: https://docs.docker.com/compose/install/
-  when: _compose_check.rc != 0
+- name: Validate native mode core settings
+  ansible.builtin.assert:
+    that:
+      - ai_horde_instance_count | int >= 1
+      - ai_horde_user | length > 0
+      - ai_horde_group | length > 0
+    fail_msg: >-
+      Native mode requires ai_horde_instance_count >= 1 and non-empty
+      ai_horde_user/ai_horde_group values.
+  when: ai_horde_deploy_mode == 'native'
 
 - name: Fail if ai_horde_postgres_password is not set
   ansible.builtin.assert:
@@ -47,98 +43,10 @@
       ai_horde_secret_key must be defined and non-empty.
       Set it in your inventory, group_vars, or vault.
 
-- name: Ensure AI-Horde base directory exists
-  ansible.builtin.file:
-    path: "{{ ai_horde_base_dir }}"
-    state: directory
-    owner: root
-    group: root
-    mode: "0750"
-  become: true
+- name: Include Docker deployment tasks
+  ansible.builtin.include_tasks: docker.yml
+  when: ai_horde_deploy_mode == 'docker'
 
-- name: Clone AI-Horde source repository
-  ansible.builtin.git:
-    repo: "{{ ai_horde_repo }}"
-    dest: "{{ ai_horde_base_dir }}/src"
-    version: "{{ ai_horde_repo_version }}"
-    force: true
-  become: true
-  register: _ai_horde_clone
-  when: ai_horde_start_services | bool
-
-- name: Create AI-Horde data directories
-  ansible.builtin.file:
-    path: "{{ item }}"
-    state: directory
-    owner: root
-    group: root
-    mode: "0750"
-  become: true
-  loop:
-    - "{{ ai_horde_data_dir }}"
-    - "{{ ai_horde_data_dir }}/postgres"
-
-- name: Template AI-Horde environment file
-  ansible.builtin.template:
-    src: ai-horde.env.j2
-    dest: "{{ ai_horde_base_dir }}/.env"
-    owner: root
-    group: root
-    mode: "0600"
-  become: true
-  notify: Restart AI-Horde stack
-
-- name: Template Docker Compose for AI-Horde stack
-  ansible.builtin.template:
-    src: docker-compose.ai-horde.yml.j2
-    dest: "{{ ai_horde_base_dir }}/docker-compose.yml"
-    owner: root
-    group: root
-    mode: "0600"
-    backup: true
-  become: true
-  notify: Restart AI-Horde stack
-
-- name: Template systemd service for AI-Horde
-  ansible.builtin.template:
-    src: ai-horde.service.j2
-    dest: /etc/systemd/system/ai-horde.service
-    mode: "0644"
-  become: true
-  notify:
-    - Reload systemd
-
-- name: Enable and start AI-Horde service
-  ansible.builtin.systemd:
-    name: ai-horde
-    enabled: true
-    state: started
-    daemon_reload: true
-  become: true
-  when: ai_horde_start_services | bool
-
-- name: Wait for PostgreSQL to become ready
-  ansible.builtin.wait_for:
-    host: 127.0.0.1
-    port: 5432
-    timeout: 60
-  when: ai_horde_start_services | bool
-
-- name: Wait for Redis to become ready
-  ansible.builtin.wait_for:
-    host: 127.0.0.1
-    port: 6379
-    timeout: 60
-  when: ai_horde_start_services | bool
-
-- name: Wait for AI-Horde heartbeat
-  ansible.builtin.uri:
-    url: "http://127.0.0.1:{{ ai_horde_port }}/api/v2/status/heartbeat"
-    method: GET
-    status_code: 200
-  register: _horde_ready
-  until: _horde_ready.status == 200
-  retries: 30
-  delay: 5
-  become: true
-  when: ai_horde_start_services | bool
+- name: Include native deployment tasks
+  ansible.builtin.include_tasks: native.yml
+  when: ai_horde_deploy_mode == 'native'

@@ -1,16 +1,21 @@
 ---
 # AI-Horde backend deployment defaults
 
-# No pre-built GHCR image exists; the role builds from source.
-# Override ai_horde_repo_version to pin to a specific commit or tag.
-ai_horde_repo: "https://github.com/Haidra-Org/AI-Horde.git"
-ai_horde_repo_version: "main"
+# "docker" (default) or "native". See README.md for details.
+ai_horde_deploy_mode: "docker"
 
-ai_horde_postgres_image: "ghcr.io/haidra-org/ai-horde-postgres:latest"
-ai_horde_redis_image: "redis:7-alpine"
+# Source repository and pinned version.
+ai_horde_repo: "https://github.com/Haidra-Org/AI-Horde.git"
+ai_horde_repo_version: "af0a85a78613cdba9863e16bbec0c179a4b2b132"
+
+# Docker-mode images (pinned by digest).
+ai_horde_postgres_image: "ghcr.io/haidra-org/ai-horde-postgres@sha256:25984d05fdb328d3283166222efd569303c0221736fc332b8f4be1b8ff37e1e4"
+ai_horde_redis_image: "redis:7-alpine@sha256:8b81dd37ff027bec4e516d41acfbe9fe2460070dc6d4a4570a2ac5b9d59df065"
 
 ai_horde_port: 7001
 ai_horde_listen: "127.0.0.1"
+# Loopback target for health checks and HAProxy backends.
+ai_horde_backend_host: "127.0.0.1"
 
 ai_horde_horde_type: "stable"
 ai_horde_verbosity: "-vvvvi"
@@ -18,28 +23,68 @@ ai_horde_verbosity: "-vvvvi"
 ai_horde_base_dir: "/opt/ai-horde"
 ai_horde_data_dir: "/var/lib/ai-horde"
 
-# ai_horde_postgres_password:    # MUST be set by operator
-# ai_horde_secret_key:           # MUST be set by operator
+# MUST be set by operator (fail-fast if missing).
+# ai_horde_postgres_password:
+# ai_horde_secret_key:
 
 ai_horde_postgres_user: "postgres"
 ai_horde_postgres_db: "postgres"
+ai_horde_postgres_host: "127.0.0.1"
+ai_horde_postgres_port: 5432
+# Override for POSTGRES_URL fragment (host[:port]/db[?opts]). See README.
+ai_horde_postgres_url_override: ""
+
+ai_horde_redis_host: "127.0.0.1"
+# Must be 6379 in native mode (AI-Horde runtime hard-codes this).
+ai_horde_redis_port: 6379
 
 ai_horde_admins: []
-
-# Dict merged into the .env file. Use for R2, OAuth, Stripe, etc.
-# Example:
-#   ai_horde_env_overrides:
-#     R2_TRANSIENT_ACCOUNT: "account-id"
-#     GOOGLE_CLIENT_ID: "xxx.apps.googleusercontent.com"
+# Extra env vars merged into .env (e.g. R2, OAuth keys).
 ai_horde_env_overrides: {}
 
+# Docker-mode logging.
 ai_horde_log_driver: "local"
 ai_horde_log_max_size: "50m"
 ai_horde_log_max_file: 5
 
-# Set to false in CI/test environments to skip Docker Compose
-# startup and health-check waits. All configs are still rendered.
+# false = render-only mode (CI/test). See README.
 ai_horde_start_services: true
-
-# Force a docker build even if the image already exists locally.
 ai_horde_force_build: false
+# true = run docker compose build --pull on every systemd start.
+ai_horde_docker_build_on_service_start: false
+
+# ── Native-mode settings (ignored in docker mode) ─────────
+ai_horde_instance_count: 1
+
+# Waitress tuning. See README "Host-Class Sizing".
+ai_horde_waitress_threads: 45
+ai_horde_waitress_connection_limit: 1024
+ai_horde_db_pool_size_per_instance: 50
+
+ai_horde_user: "aihorde"
+ai_horde_group: "aihorde"
+ai_horde_venv_dir: "{{ ai_horde_base_dir }}/venv"
+
+# uv installer (pinned version + checksum).
+# Keep in sync with roles/horde_stats_exporter/defaults/main.yml.
+ai_horde_uv_version: "0.11.2"
+ai_horde_uv_installer_url: "https://astral.sh/uv/{{ ai_horde_uv_version }}/install.sh"
+ai_horde_uv_installer_checksum: "sha256:a6ccba649ac029ce18500400019d60de389838d13a6751aa2908ede1b2aa3a87"
+ai_horde_uv_allow_unverified_installer: false
+
+# Local PostgreSQL/Redis provisioning (false = external).
+ai_horde_install_postgres: false
+ai_horde_install_redis: false
+
+# HAProxy load balancing. See README for mode details.
+ai_horde_install_haproxy: false
+ai_horde_haproxy_port: 8080
+ai_horde_haproxy_listen: "*"
+# "safe_edit" (shared hosts, default) or "standalone" (dedicated hosts).
+ai_horde_haproxy_mode: "safe_edit"
+ai_horde_haproxy_backup_dir: "/var/backups/haproxy"
+ai_horde_haproxy_backup_retention_count: 20
+ai_horde_haproxy_config_path: "/etc/haproxy/haproxy.cfg"
+# 300s timeout for long AI requests.
+ai_horde_haproxy_timeout_server: 300000
+ai_horde_haproxy_render_preview_path: "{{ ai_horde_base_dir }}/rendered/haproxy.cfg"
