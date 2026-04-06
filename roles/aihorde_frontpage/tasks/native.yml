@@ -166,16 +166,6 @@
     - aihorde_frontpage_start_services | bool
     - _frontpage_needs_build | default(false)
 
-- name: Create dist directory
-  ansible.builtin.file:
-    path: "{{ aihorde_frontpage_base_dir }}/dist"
-    state: directory
-    owner: "{{ aihorde_frontpage_user }}"
-    group: "{{ aihorde_frontpage_group }}"
-    mode: "0755"
-  become: true
-  when: aihorde_frontpage_start_services | bool
-
 - name: Remove existing dist directory before deploying fresh artifacts
   ansible.builtin.file:
     path: "{{ aihorde_frontpage_base_dir }}/dist"

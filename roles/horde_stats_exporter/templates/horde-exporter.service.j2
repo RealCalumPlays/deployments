@@ -19,7 +19,7 @@ NoNewPrivileges=true
 PrivateTmp=true
 ProtectSystem=strict
 ProtectHome=true
-ReadWritePaths={{ exporter_log_file }}
+ReadWritePaths={{ exporter_log_file | dirname }}
 
 [Install]
 WantedBy=multi-user.target
