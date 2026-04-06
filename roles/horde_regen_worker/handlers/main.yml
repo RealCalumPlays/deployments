@@ -10,7 +10,7 @@
     XDG_RUNTIME_DIR: "/run/user/{{ getent_passwd[worker_username].1 }}"
   become: true
   become_user: "{{ worker_username }}"
-  when: not service_started.changed
+  when: not (service_started is defined and service_started.changed | default(false))
   tags:
     - worker
     - systemd

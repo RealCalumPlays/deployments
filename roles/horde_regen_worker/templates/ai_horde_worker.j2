@@ -4,7 +4,7 @@ After=network.target
 StartLimitIntervalSec=0
 
 [Service]
-WorkingDirectory=//home/{{ worker_username }}/{{ worker_runtime_dir }}
+WorkingDirectory=/home/{{ worker_username }}/{{ worker_runtime_dir }}
 {% if amd_gpu %}
 ExecStart=sh -c '/home/{{ worker_username }}/{{ worker_clone_dir }}/horde-bridge-rocm.sh'
 {% else %}

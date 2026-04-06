@@ -27,7 +27,7 @@
     dest: "{{ aihorde_frontpage_base_dir }}/.env"
     owner: root
     group: root
-    mode: "0644"
+    mode: "0640"
   become: true
 
 - name: Include Docker deployment tasks

@@ -20,7 +20,7 @@ exporter_install_dir: /opt/horde-exporter
 # The exporter is installed directly from GitHub via uv.
 # Pin exporter_repo_ref to a release tag or commit SHA for reproducibility.
 exporter_repo_url: "https://github.com/Haidra-Org/horde-exporters"
-exporter_repo_ref: main
+exporter_repo_ref: "096c1fb8451b27e0a3dd0fc32092dda92e0e52e3"
 
 # ---------------------------------------------------------------------------
 # Exporter configuration
@@ -55,6 +55,12 @@ exporter_downsample_source_tenant: "ai-horde-app"
 exporter_downsample_target_tenant: "ai-horde-public"
 exporter_downsample_mimir_url: "http://localhost:9009"
 exporter_downsample_resolution: "5m"
+
+# ---------------------------------------------------------------------------
+# uv installer pinning  (keep in sync with roles/ai_horde/defaults/main.yml)
+# ---------------------------------------------------------------------------
+exporter_uv_version: "0.11.2"
+exporter_uv_installer_checksum: "sha256:a6ccba649ac029ce18500400019d60de389838d13a6751aa2908ede1b2aa3a87"
 
 # ---------------------------------------------------------------------------
 # Logging

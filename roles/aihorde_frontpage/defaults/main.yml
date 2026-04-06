@@ -7,7 +7,7 @@
 aihorde_frontpage_deploy_mode: "docker"
 
 aihorde_frontpage_repo: "https://github.com/Haidra-Org/AiHordeFrontpage.git"
-aihorde_frontpage_repo_version: "master"
+aihorde_frontpage_repo_version: "a56aec53f46470ca3796e1a7eabbe029e32563d3"
 
 aihorde_frontpage_base_dir: "/opt/aihorde-frontpage"
 
@@ -41,6 +41,11 @@ aihorde_frontpage_start_services: true
 
 # Force a docker build even if the image already exists locally.
 aihorde_frontpage_force_build: false
+
+# If true, systemd service start runs `docker compose build` before `up -d`.
+# Default false for fast restarts; builds are triggered by the handler on
+# source or config changes instead.
+aihorde_frontpage_docker_build_on_service_start: false
 
 # System user/group for the Node.js process (native mode only).
 aihorde_frontpage_user: "aihorde-frontpage"

@@ -20,7 +20,7 @@ amd_gpu: false
 # The directory to store the models. It will be place in the homedir of the owning user.
 models_dir: regen_worker_models
 regen_worker_repo: https://github.com/Haidra-Org/horde-worker-regen
-regen_worker_repo_version: main
+regen_worker_repo_version: "94f8e255c4a58c8d56b2f6effe1e039dbfe70974"
 # Set this to true to make the worker update the runtime manually the first time
 # useful if setting up multiple services using the same runtime, to avoid multiple
 # servicers trying to do it at the same time and deadlocking

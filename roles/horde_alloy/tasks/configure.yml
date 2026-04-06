@@ -28,6 +28,7 @@
     mode: "0640"
     backup: true
   become: true
+  no_log: true
   notify: Restart alloy
 
 - name: Configure Alloy systemd environment overrides
