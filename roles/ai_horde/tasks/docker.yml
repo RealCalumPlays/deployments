@@ -1,0 +1,128 @@
+---
+# Docker Compose deployment for AI-Horde backend
+# Bundles AI-Horde + PostgreSQL + Redis in a single compose stack.
+# Wrapped by a systemd oneshot unit for boot-time management.
+
+- name: Verify Docker is available
+  ansible.builtin.command: docker --version
+  changed_when: false
+  failed_when: false
+  register: _docker_check
+  become: true
+
+- name: Fail if Docker is not installed
+  ansible.builtin.fail:
+    msg: "Docker is required for ai_horde_deploy_mode=docker. Please install Docker first."
+  when: _docker_check.rc != 0
+
+- name: Verify Docker Compose V2 is available
+  ansible.builtin.command: docker compose version
+  changed_when: false
+  failed_when: false
+  register: _compose_check
+  become: true
+
+- name: Ensure AI-Horde base directory exists (docker mode)
+  ansible.builtin.file:
+    path: "{{ ai_horde_base_dir }}"
+    state: directory
+    owner: root
+    group: root
+    mode: "0750"
+  become: true
+
+- name: Fail if Docker Compose V2 is not available
+  ansible.builtin.fail:
+    msg: >-
+      Docker Compose V2 plugin is required but 'docker compose version' failed.
+      The standalone docker-compose (V1) is end-of-life. Please install the
+      Docker Compose V2 plugin: https://docs.docker.com/compose/install/
+  when: _compose_check.rc != 0
+
+- name: Clone AI-Horde source repository
+  ansible.builtin.git:
+    repo: "{{ ai_horde_repo }}"
+    dest: "{{ ai_horde_base_dir }}/src"
+    version: "{{ ai_horde_repo_version }}"
+    force: true
+  become: true
+  register: _ai_horde_clone
+  notify: Rebuild AI-Horde Docker stack
+  when: ai_horde_start_services | bool
+
+- name: Create AI-Horde data directories
+  ansible.builtin.file:
+    path: "{{ item }}"
+    state: directory
+    owner: root
+    group: root
+    mode: "0750"
+  become: true
+  loop:
+    - "{{ ai_horde_data_dir }}"
+    - "{{ ai_horde_data_dir }}/postgres"
+
+- name: Template AI-Horde environment file
+  ansible.builtin.template:
+    src: ai-horde.env.j2
+    dest: "{{ ai_horde_base_dir }}/.env"
+    owner: root
+    group: root
+    mode: "0600"
+  become: true
+  no_log: true
+  notify: Restart AI-Horde Docker stack
+
+- name: Template Docker Compose for AI-Horde stack
+  ansible.builtin.template:
+    src: docker-compose.ai-horde.yml.j2
+    dest: "{{ ai_horde_base_dir }}/docker-compose.yml"
+    owner: root
+    group: root
+    mode: "0600"
+    backup: true
+  become: true
+  notify: Restart AI-Horde Docker stack
+
+- name: Template systemd service for AI-Horde (Docker)
+  ansible.builtin.template:
+    src: ai-horde.service.j2
+    dest: /etc/systemd/system/ai-horde.service
+    mode: "0644"
+  become: true
+  notify:
+    - Reload systemd
+    - Restart AI-Horde Docker stack
+
+- name: Force Docker image rebuild when requested
+  ansible.builtin.debug:
+    msg: "Force rebuild requested — will build and restart via handler"
+  changed_when: true
+  notify: Rebuild AI-Horde Docker stack
+  when:
+    - ai_horde_start_services | bool
+    - ai_horde_force_build | bool
+
+- name: Enable and start AI-Horde service
+  ansible.builtin.systemd:
+    name: ai-horde
+    enabled: true
+    state: started
+    daemon_reload: true
+  become: true
+  when: ai_horde_start_services | bool
+
+# Postgres and Redis are internal to the compose network (no host port mapping).
+# Their readiness is enforced by compose depends_on + service_healthy conditions.
+# Only the AI-Horde heartbeat endpoint is exposed to the host.
+- name: Wait for AI-Horde heartbeat
+  ansible.builtin.uri:
+    url: "http://{{ ai_horde_backend_host }}:{{ ai_horde_port }}/api/v2/status/heartbeat"
+    method: GET
+    status_code: 200
+  register: _horde_ready
+  until: _horde_ready.status == 200
+  retries: 30
+  delay: 5
+  become: true
+  when: ai_horde_start_services | bool
