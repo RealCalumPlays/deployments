@@ -1,20 +1,20 @@
 [Unit]
-Description={{ worker_service_name }}
+Description={{ horde_regen_worker_service_name }}
 After=network.target
 StartLimitIntervalSec=0
 
 [Service]
-WorkingDirectory=/home/{{ worker_username }}/{{ worker_runtime_dir }}
-{% if amd_gpu %}
-ExecStart=sh -c '/home/{{ worker_username }}/{{ worker_clone_dir }}/horde-bridge-rocm.sh'
+WorkingDirectory=/home/{{ horde_regen_worker_username }}/{{ horde_regen_worker_runtime_dir }}
+{% if horde_regen_worker_amd_gpu %}
+ExecStart=sh -c '/home/{{ horde_regen_worker_username }}/{{ horde_regen_worker_clone_dir }}/horde-bridge-rocm.sh'
 {% else %}
-ExecStart=sh -c '/home/{{ worker_username }}/{{ worker_clone_dir }}/horde-bridge.sh'
+ExecStart=sh -c '/home/{{ horde_regen_worker_username }}/{{ horde_regen_worker_clone_dir }}/horde-bridge.sh'
 {% endif %}
 Restart=always
 RestartSec=15
 TimeoutStopSec=120
 KillSignal=SIGINT
-Environment="{{ worker_environment }}"
+Environment="{{ horde_regen_worker_environment }}"
 
 [Install]
 WantedBy=default.target

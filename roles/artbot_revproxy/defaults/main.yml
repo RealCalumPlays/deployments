@@ -1,15 +1,15 @@
 ---
 # The DNS for your artbot site
-artbot_domain: artbot.site
+artbot_revproxy_domain: artbot.site
 # Any other domains which might be running in the same server.
 # These will redirect to artbot unless you adjust your haproxy template.
-other_domains: artbot.haidra.net
+artbot_revproxy_other_domains: artbot.haidra.net
 # The email to provide to certbot
-email: your.email@example.com
+artbot_revproxy_email: your.email@example.com
 # The address of the server running the ansible service on port 3001
-artbot_server: 127.0.0.1
+artbot_revproxy_server: 127.0.0.1
 # set this to true to generate a self-signed https certificate instead of using let's encrypt
 # This is useful if you plan to server behind a cloudflare proxy and let cloudflare handle the ssl certificates, for example.
-self_signed_cert: false
+artbot_revproxy_self_signed_cert: false
 # You can provide a different haproxy config file.
-haproxy_cfg_template: haproxy.cfg.j2
+artbot_revproxy_haproxy_cfg_template: haproxy.cfg.j2

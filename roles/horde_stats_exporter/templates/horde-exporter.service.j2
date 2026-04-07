@@ -5,21 +5,21 @@ Wants=network-online.target
 
 [Service]
 Type=simple
-User={{ exporter_user }}
-Group={{ exporter_user }}
-WorkingDirectory={{ exporter_install_dir }}
-ExecStart={{ exporter_install_dir }}/venv/bin/horde-exporter --config {{ exporter_install_dir }}/exporter_config.yaml
+User={{ horde_stats_exporter_user }}
+Group={{ horde_stats_exporter_user }}
+WorkingDirectory={{ horde_stats_exporter_install_dir }}
+ExecStart={{ horde_stats_exporter_install_dir }}/venv/bin/horde-exporter --config {{ horde_stats_exporter_install_dir }}/exporter_config.yaml
 Restart=always
 RestartSec=10
-StandardOutput=append:{{ exporter_log_file }}
-StandardError=append:{{ exporter_log_file }}
+StandardOutput=append:{{ horde_stats_exporter_log_file }}
+StandardError=append:{{ horde_stats_exporter_log_file }}
 
 # Security hardening
 NoNewPrivileges=true
 PrivateTmp=true
 ProtectSystem=strict
 ProtectHome=true
-ReadWritePaths={{ exporter_log_file | dirname }}
+ReadWritePaths={{ horde_stats_exporter_log_file | dirname }}
 
 [Install]
 WantedBy=multi-user.target

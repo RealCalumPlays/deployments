@@ -1,6 +1,6 @@
 ---
 # Example playbook for deploying a regen worker.
-# The worker connects to an AI-Horde backend via `horde_url` in bridgeData.yaml.
+# The worker connects to an AI-Horde backend via `horde_regen_worker_horde_url` in bridgeData.yaml.
 # Deploy the ai_horde role first (see full_horde_stack.yml for a combined example).
 
 - name: Deploy regen worker
@@ -14,5 +14,5 @@
 # - name: haidra.deployments.amd_gpu_drivers
 # - name: haidra.deployments.horde_regen_worker
 #   vars:
-#     amd_gpu: true
+#     horde_regen_worker_amd_gpu: true
 #   tags: regen

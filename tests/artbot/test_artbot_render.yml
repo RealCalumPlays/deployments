@@ -21,7 +21,7 @@
         that:
           - artbot_status_api is defined
           - artbot_status_api | length > 0
-          - force_build is defined
+          - artbot_force_build is defined
 
     - name: Stat artbot tasks file
       ansible.builtin.stat:
@@ -49,9 +49,9 @@
   hosts: testhost
   become: true
   vars:
-    artbot_domain: "artbot.test.local"
-    other_domains: "artbot-alt.test.local"
-    artbot_server: "127.0.0.1"
+    artbot_revproxy_domain: "artbot.test.local"
+    artbot_revproxy_other_domains: "artbot-alt.test.local"
+    artbot_revproxy_server: "127.0.0.1"
   tasks:
     - name: Create haproxy cert directory
       ansible.builtin.file:
@@ -113,8 +113,8 @@
   hosts: testhost
   become: true
   vars:
-    artbot_domain: "artbot.test.local"
-    other_domains: "artbot-alt.test.local"
+    artbot_revproxy_domain: "artbot.test.local"
+    artbot_revproxy_other_domains: "artbot-alt.test.local"
   tasks:
     - name: Template certbot renewal script
       ansible.builtin.template:

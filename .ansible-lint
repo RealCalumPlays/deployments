@@ -7,11 +7,5 @@ exclude_paths:
   - .ansible/
   - roles/geerlingguy.*/
 
-skip_list:
-  # Deferred roles only — target roles (horde_monitoring, horde_alloy, ai_horde,
-  # aihorde_frontpage, _haproxy_safe_edit, _uv_bootstrap) are fully remediated.
-  # Remaining: artbot, artbot_revproxy, horde_regen_worker, horde_stats_exporter.
-  - var-naming[no-role-prefix]
-
 warn_list:
   - yaml[comments]

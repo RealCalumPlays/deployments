@@ -3,23 +3,23 @@
 # Ansible deployment settings
 # ---------------------------------------------------------------------------
 # System user under which the worker runs (userspace systemd service).
-worker_username: hworker
+horde_regen_worker_username: hworker
 # Extra environment variables passed to the systemd service.
-worker_environment: ""
+horde_regen_worker_environment: ""
 # Directory to clone the worker source into.
-worker_clone_dir: horde-worker-regen
+horde_regen_worker_clone_dir: horde-worker-regen
 # Runtime directory for bridgeData.yaml and logs (defaults to clone dir).
-worker_runtime_dir: horde-worker-regen
+horde_regen_worker_runtime_dir: horde-worker-regen
 # Systemd service filename — change when running multiple workers per host.
-worker_service_name: ai_horde_worker
+horde_regen_worker_service_name: ai_horde_worker
 # Set true for AMD GPU hosts (selects ROCm runtime scripts).
-amd_gpu: false
-# Model cache directory (relative to worker_username home).
-models_dir: regen_worker_models
-regen_worker_repo: https://github.com/Haidra-Org/horde-worker-regen
-regen_worker_repo_version: "94f8e255c4a58c8d56b2f6effe1e039dbfe70974"
+horde_regen_worker_amd_gpu: false
+# Model cache directory (relative to horde_regen_worker_username home).
+horde_regen_worker_models_dir: regen_worker_models
+horde_regen_worker_repo: https://github.com/Haidra-Org/horde-worker-regen
+horde_regen_worker_repo_version: "94f8e255c4a58c8d56b2f6effe1e039dbfe70974"
 # Run update-runtime and download models on first deploy.
-initialize: false
+horde_regen_worker_initialize: false
 
 # ---------------------------------------------------------------------------
 # bridgeData.yaml variables
@@ -28,61 +28,61 @@ initialize: false
 # https://github.com/Haidra-Org/horde-worker-regen/blob/main/bridgeData_template.yaml
 
 # Common
-horde_url: "https://aihorde.net"
-api_key: "0000000000"
-priority_usernames: []
-max_threads: 1
-queue_size: 1
-max_batch: 1
-safety_on_gpu: false
-require_upfront_kudos: false
-# civitai_api_token:  # uncomment and set to enable civitai downloads
+horde_regen_worker_horde_url: "https://aihorde.net"
+horde_regen_worker_api_key: "0000000000"
+horde_regen_worker_priority_usernames: []
+horde_regen_worker_max_threads: 1
+horde_regen_worker_queue_size: 1
+horde_regen_worker_max_batch: 1
+horde_regen_worker_safety_on_gpu: false
+horde_regen_worker_require_upfront_kudos: false
+# horde_regen_worker_civitai_api_token:  # uncomment and set to enable civitai downloads
 
 # Dreamer (Stable Diffusion)
-dreamer_name: "An Awesome Dreamer"
-max_power: 8
-blacklist: []
-nsfw: true
-censor_nsfw: false
-censorlist: []
-allow_img2img: true
-allow_painting: true
-allow_unsafe_ip: true
-allow_post_processing: true
-allow_controlnet: false
-allow_sdxl_controlnet: false
-allow_lora: false
-max_lora_cache_size: 10
-dynamic_models: false
-number_of_dynamic_models: 0
-max_models_to_download: 10
-stats_output_frequency: 30
+horde_regen_worker_dreamer_name: "An Awesome Dreamer"
+horde_regen_worker_max_power: 8
+horde_regen_worker_blacklist: []
+horde_regen_worker_nsfw: true
+horde_regen_worker_censor_nsfw: false
+horde_regen_worker_censorlist: []
+horde_regen_worker_allow_img2img: true
+horde_regen_worker_allow_painting: true
+horde_regen_worker_allow_unsafe_ip: true
+horde_regen_worker_allow_post_processing: true
+horde_regen_worker_allow_controlnet: false
+horde_regen_worker_allow_sdxl_controlnet: false
+horde_regen_worker_allow_lora: false
+horde_regen_worker_max_lora_cache_size: 10
+horde_regen_worker_dynamic_models: false
+horde_regen_worker_number_of_dynamic_models: 0
+horde_regen_worker_max_models_to_download: 10
+horde_regen_worker_stats_output_frequency: 30
 
-models_to_load:
+horde_regen_worker_models_to_load:
   - "top 2"
 
-models_to_skip:
+horde_regen_worker_models_to_skip:
   - "pix2pix"
   - "SDXL_beta::stability.ai#6901"
   - A to Zovya RPG
 
-suppress_speed_warnings: false
+horde_regen_worker_suppress_speed_warnings: false
 
 # Advanced
-moderate_performance_mode: false
-high_performance_mode: false
-exit_on_unhandled_faults: true
+horde_regen_worker_moderate_performance_mode: false
+horde_regen_worker_high_performance_mode: false
+horde_regen_worker_exit_on_unhandled_faults: true
 
 # Scribe (LLM)
-scribe_name: "An Awesome Scribe"
-kai_url: "http://localhost:5000"
-max_length: 80
-max_context_length: 1024
-branded_model: true
+horde_regen_worker_scribe_name: "An Awesome Scribe"
+horde_regen_worker_kai_url: "http://localhost:5000"
+horde_regen_worker_max_length: 80
+horde_regen_worker_max_context_length: 1024
+horde_regen_worker_branded_model: true
 
 # Alchemist (interrogation / post-processing)
-alchemist_name: "An Awesome Alchemist"
-forms:
+horde_regen_worker_alchemist_name: "An Awesome Alchemist"
+horde_regen_worker_forms:
   - "caption"
   - "nsfw"
   - "interrogation"

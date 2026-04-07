@@ -37,7 +37,7 @@ defaults
 frontend artbot
    maxconn 30000
    bind *:80
-   bind *:443 ssl crt /etc/haproxy/cert/{{ artbot_domain }}.pem
+   bind *:443 ssl crt /etc/haproxy/cert/{{ artbot_revproxy_domain }}.pem
    http-request redirect scheme https unless { ssl_fc }
    http-request set-header X-Forwarded-Proto https if { ssl_fc }
    http-request set-header X-Forwarded-Port %[dst_port]
@@ -61,8 +61,8 @@ backend artbot_backend
    retries 3
    option forwardfor if-none
    option httpchk
-   server artbot_server {{ artbot_server }}:3001 check observe layer7
-   http-request set-header host {{ artbot_domain }}
+   server artbot_server {{ artbot_revproxy_server }}:3001 check observe layer7
+   http-request set-header host {{ artbot_revproxy_domain }}
 
 backend lets_encrypt
    mode http

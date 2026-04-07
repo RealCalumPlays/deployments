@@ -30,8 +30,8 @@ all:
           horde_monitoring_configure_haproxy: true
 
           # Stats exporter
-          exporter_port: 9150
-          exporter_enable_downsampling: true
+          horde_stats_exporter_port: 9150
+          horde_stats_exporter_enable_downsampling: true
 
     haproxy:
       hosts:

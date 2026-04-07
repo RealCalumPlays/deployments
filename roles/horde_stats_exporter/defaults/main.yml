@@ -11,59 +11,59 @@
 # User and directories
 # ---------------------------------------------------------------------------
 # Dedicated unprivileged system user — created automatically by the role.
-exporter_user: horde-exporter
-exporter_install_dir: /opt/horde-exporter
+horde_stats_exporter_user: horde-exporter
+horde_stats_exporter_install_dir: /opt/horde-exporter
 
 # ---------------------------------------------------------------------------
 # Git repository
 # ---------------------------------------------------------------------------
 # The exporter is installed directly from GitHub via uv.
-# Pin exporter_repo_ref to a release tag or commit SHA for reproducibility.
-exporter_repo_url: "https://github.com/Haidra-Org/horde-exporters"
-exporter_repo_ref: "096c1fb8451b27e0a3dd0fc32092dda92e0e52e3"
+# Pin horde_stats_exporter_repo_ref to a release tag or commit SHA for reproducibility.
+horde_stats_exporter_repo_url: "https://github.com/Haidra-Org/horde-exporters"
+horde_stats_exporter_repo_ref: "096c1fb8451b27e0a3dd0fc32092dda92e0e52e3"
 
 # ---------------------------------------------------------------------------
 # Exporter configuration
 # ---------------------------------------------------------------------------
 # Port where the /metrics endpoint is served.
-exporter_port: 9150
-exporter_api_base_url: "https://aihorde.net/api/v2"
-exporter_user_agent: "horde_prometheus_exporter"
+horde_stats_exporter_port: 9150
+horde_stats_exporter_api_base_url: "https://aihorde.net/api/v2"
+horde_stats_exporter_user_agent: "horde_prometheus_exporter"
 # API request timeout in seconds.
-exporter_api_timeout: 10
+horde_stats_exporter_api_timeout: 10
 
 # ---------------------------------------------------------------------------
 # Scrape intervals (seconds)
 # ---------------------------------------------------------------------------
 # Each metric group is polled independently at its own interval.
-exporter_scrape_models: 8  # Model queue depths and worker counts
-exporter_scrape_workers: 300  # Individual worker statistics
-exporter_scrape_performance: 2  # Global queue and performance counters
-exporter_scrape_stats: 120  # Historical generation statistics
-exporter_scrape_modes: 30  # Heartbeat and maintenance mode flags
-exporter_scrape_teams: 300  # Team-level statistics
+horde_stats_exporter_scrape_models: 8  # Model queue depths and worker counts
+horde_stats_exporter_scrape_workers: 300  # Individual worker statistics
+horde_stats_exporter_scrape_performance: 2  # Global queue and performance counters
+horde_stats_exporter_scrape_stats: 120  # Historical generation statistics
+horde_stats_exporter_scrape_modes: 30  # Heartbeat and maintenance mode flags
+horde_stats_exporter_scrape_teams: 300  # Team-level statistics
 
 # ---------------------------------------------------------------------------
 # Downsampling (opt-in)
 # ---------------------------------------------------------------------------
 # Reads high-resolution data from the application Mimir tenant and writes a
 # lower-resolution copy to the public tenant for public-facing dashboards.
-exporter_enable_downsampling: true
-exporter_downsample_schedule: daily
-exporter_prometheus_url: "http://localhost:9090"
-exporter_downsample_source_tenant: "ai-horde-app"
-exporter_downsample_target_tenant: "ai-horde-public"
-exporter_downsample_mimir_url: "http://localhost:9009"
-exporter_downsample_resolution: "5m"
+horde_stats_exporter_enable_downsampling: true
+horde_stats_exporter_downsample_schedule: daily
+horde_stats_exporter_prometheus_url: "http://localhost:9090"
+horde_stats_exporter_downsample_source_tenant: "ai-horde-app"
+horde_stats_exporter_downsample_target_tenant: "ai-horde-public"
+horde_stats_exporter_downsample_mimir_url: "http://localhost:9009"
+horde_stats_exporter_downsample_resolution: "5m"
 
 # ---------------------------------------------------------------------------
 # uv installer pinning  (installation logic: roles/_uv_bootstrap)
 # ---------------------------------------------------------------------------
-exporter_uv_version: "0.11.2"
-exporter_uv_installer_checksum: "sha256:a6ccba649ac029ce18500400019d60de389838d13a6751aa2908ede1b2aa3a87"
+horde_stats_exporter_uv_version: "0.11.2"
+horde_stats_exporter_uv_installer_checksum: "sha256:a6ccba649ac029ce18500400019d60de389838d13a6751aa2908ede1b2aa3a87"
 
 # ---------------------------------------------------------------------------
 # Logging
 # ---------------------------------------------------------------------------
-exporter_log_level: INFO
-exporter_log_file: /var/log/horde-stats/exporter.log
+horde_stats_exporter_log_level: INFO
+horde_stats_exporter_log_file: /var/log/horde-stats/exporter.log

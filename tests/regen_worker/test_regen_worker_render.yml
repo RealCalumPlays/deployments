@@ -13,75 +13,75 @@
   become: true
   vars:
     # Override key variables for assertion
-    worker_username: "testworker"
-    worker_clone_dir: "horde-worker-regen"
-    worker_runtime_dir: "horde-worker-regen"
-    worker_service_name: "ai_horde_worker"
-    worker_environment: ""
-    amd_gpu: false
-    models_dir: "regen_worker_models"
-    horde_url: "https://aihorde.net"
-    api_key: "test-api-key-12345"
-    priority_usernames: ["priority_user"]
-    max_threads: 1
-    queue_size: 1
-    max_batch: 1
-    max_power: 8
-    allow_unsafe_ip: true
-    require_upfront_kudos: false
-    dreamer_name: "test-dreamer"
-    blacklist: []
-    nsfw: false
-    censor_nsfw: false
-    censorlist: []
-    allow_img2img: true
-    allow_painting: true
-    allow_controlnet: true
-    allow_sdxl_controlnet: false
-    allow_lora: true
-    max_lora_cache_size: 10
-    allow_post_processing: true
-    safety_on_gpu: false
-    dynamic_models: false
-    number_of_dynamic_models: 0
-    max_models_to_download: 10
-    stats_output_frequency: 30
-    moderate_performance_mode: false
-    high_performance_mode: false
-    exit_on_unhandled_faults: true
-    scribe_name: "test-scribe"
-    kai_url: "http://localhost:5000"
-    max_length: 80
-    max_context_length: 1024
-    branded_model: true
-    alchemist_name: "test-alchemist"
-    forms:
+    horde_regen_worker_username: "testworker"
+    horde_regen_worker_clone_dir: "horde-worker-regen"
+    horde_regen_worker_runtime_dir: "horde-worker-regen"
+    horde_regen_worker_service_name: "ai_horde_worker"
+    horde_regen_worker_environment: ""
+    horde_regen_worker_amd_gpu: false
+    horde_regen_worker_models_dir: "regen_worker_models"
+    horde_regen_worker_horde_url: "https://aihorde.net"
+    horde_regen_worker_api_key: "test-api-key-12345"
+    horde_regen_worker_priority_usernames: ["priority_user"]
+    horde_regen_worker_max_threads: 1
+    horde_regen_worker_queue_size: 1
+    horde_regen_worker_max_batch: 1
+    horde_regen_worker_max_power: 8
+    horde_regen_worker_allow_unsafe_ip: true
+    horde_regen_worker_require_upfront_kudos: false
+    horde_regen_worker_dreamer_name: "test-dreamer"
+    horde_regen_worker_blacklist: []
+    horde_regen_worker_nsfw: false
+    horde_regen_worker_censor_nsfw: false
+    horde_regen_worker_censorlist: []
+    horde_regen_worker_allow_img2img: true
+    horde_regen_worker_allow_painting: true
+    horde_regen_worker_allow_controlnet: true
+    horde_regen_worker_allow_sdxl_controlnet: false
+    horde_regen_worker_allow_lora: true
+    horde_regen_worker_max_lora_cache_size: 10
+    horde_regen_worker_allow_post_processing: true
+    horde_regen_worker_safety_on_gpu: false
+    horde_regen_worker_dynamic_models: false
+    horde_regen_worker_number_of_dynamic_models: 0
+    horde_regen_worker_max_models_to_download: 10
+    horde_regen_worker_stats_output_frequency: 30
+    horde_regen_worker_moderate_performance_mode: false
+    horde_regen_worker_high_performance_mode: false
+    horde_regen_worker_exit_on_unhandled_faults: true
+    horde_regen_worker_scribe_name: "test-scribe"
+    horde_regen_worker_kai_url: "http://localhost:5000"
+    horde_regen_worker_max_length: 80
+    horde_regen_worker_max_context_length: 1024
+    horde_regen_worker_branded_model: true
+    horde_regen_worker_alchemist_name: "test-alchemist"
+    horde_regen_worker_forms:
       - "caption"
       - "nsfw"
       - "interrogation"
       - "post-process"
-    models_to_load:
+    horde_regen_worker_models_to_load:
       - "stable_diffusion"
       - "TOP 2"
-    models_to_skip:
+    horde_regen_worker_models_to_skip:
       - "pix2pix"
 
   tasks:
     - name: Create worker home directory
       ansible.builtin.file:
-        path: "/home/{{ worker_username }}/{{ worker_runtime_dir }}"
+        path: "/home/{{ horde_regen_worker_username }}/{{ horde_regen_worker_runtime_dir }}"
         state: directory
         mode: "0755"
 
     - name: Template bridgeData.yaml
       ansible.builtin.template:
         src: "../../roles/horde_regen_worker/templates/bridgeData.yaml.j2"
-        dest: "/home/{{ worker_username }}/{{ worker_runtime_dir }}/bridgeData.yaml"
+        dest: "/home/{{ horde_regen_worker_username }}/{{ horde_regen_worker_runtime_dir }}/bridgeData.yaml"
         mode: "0600"
 
     - name: Read bridgeData.yaml
       ansible.builtin.slurp:
-        src: "/home/{{ worker_username }}/{{ worker_runtime_dir }}/bridgeData.yaml"
+        src: "/home/{{ horde_regen_worker_username }}/{{ horde_regen_worker_runtime_dir }}/bridgeData.yaml"
       register: _bridge
 
     - name: Assert bridgeData has correct horde_url
@@ -164,7 +164,7 @@
         dest: "/tmp/ai_horde_worker_amd.service"
         mode: "0644"
       vars:
-        amd_gpu: true
+        horde_regen_worker_amd_gpu: true
 
     - name: Read AMD service unit
       ansible.builtin.slurp:
