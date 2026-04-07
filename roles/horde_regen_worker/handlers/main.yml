@@ -3,14 +3,14 @@
   ansible.builtin.systemd:
     state: restarted
     daemon_reload: true
-    name: "{{ worker_service_name }}"
+    name: "{{ horde_regen_worker_service_name }}"
     enabled: true
     scope: user
   environment:
-    XDG_RUNTIME_DIR: "/run/user/{{ getent_passwd[worker_username].1 }}"
+    XDG_RUNTIME_DIR: "/run/user/{{ getent_passwd[horde_regen_worker_username].1 }}"
   become: true
-  become_user: "{{ worker_username }}"
-  when: not (service_started is defined and service_started.changed | default(false))
+  become_user: "{{ horde_regen_worker_username }}"
+  when: not (horde_regen_worker_service_started is defined and horde_regen_worker_service_started.changed | default(false))
   tags:
     - worker
     - systemd

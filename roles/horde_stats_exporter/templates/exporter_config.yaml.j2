@@ -2,18 +2,18 @@
 # Managed by Ansible - do not edit manually
 
 scrape_intervals:
-  models: {{ exporter_scrape_models }}
-  workers: {{ exporter_scrape_workers }}
-  performance: {{ exporter_scrape_performance }}
-  stats: {{ exporter_scrape_stats }}
-  modes: {{ exporter_scrape_modes }}
-  teams: {{ exporter_scrape_teams }}
+  models: {{ horde_stats_exporter_scrape_models }}
+  workers: {{ horde_stats_exporter_scrape_workers }}
+  performance: {{ horde_stats_exporter_scrape_performance }}
+  stats: {{ horde_stats_exporter_scrape_stats }}
+  modes: {{ horde_stats_exporter_scrape_modes }}
+  teams: {{ horde_stats_exporter_scrape_teams }}
 
 api:
-  base_url: "{{ exporter_api_base_url }}"
-  user_agent: "{{ exporter_user_agent }}"
-  timeout: {{ exporter_api_timeout }}
+  base_url: "{{ horde_stats_exporter_api_base_url }}"
+  user_agent: "{{ horde_stats_exporter_user_agent }}"
+  timeout: {{ horde_stats_exporter_api_timeout }}
 
 exporter:
-  port: {{ exporter_port }}
-  log_level: {{ exporter_log_level }}
+  port: {{ horde_stats_exporter_port }}
+  log_level: {{ horde_stats_exporter_log_level }}

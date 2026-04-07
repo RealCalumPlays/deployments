@@ -123,11 +123,11 @@
           # HAProxy port derives from ingress port variable
           - (_full_stack_example_raw.content | b64decode) is search('ai_horde_haproxy_port:.*horde_api_ingress_port')
           # Cross-host URLs use variable indirection
-          - (_full_stack_example_raw.content | b64decode) is search('exporter_api_base_url:.*horde_api_host.*horde_api_ingress_port')
-          - (_full_stack_example_raw.content | b64decode) is search('horde_url:.*horde_api_host.*horde_api_ingress_port')
+          - (_full_stack_example_raw.content | b64decode) is search('horde_stats_exporter_api_base_url:.*horde_api_host.*horde_api_ingress_port')
+          - (_full_stack_example_raw.content | b64decode) is search('horde_regen_worker_horde_url:.*horde_api_host.*horde_api_ingress_port')
           # Negative: must not hardcode localhost in cross-host endpoints
-          - (_full_stack_example_raw.content | b64decode) is not search('exporter_api_base_url:.*http://localhost')
-          - (_full_stack_example_raw.content | b64decode) is not search('horde_url:.*http://localhost')
+          - (_full_stack_example_raw.content | b64decode) is not search('horde_stats_exporter_api_base_url:.*http://localhost')
+          - (_full_stack_example_raw.content | b64decode) is not search('horde_regen_worker_horde_url:.*http://localhost')
         fail_msg: >-
           Full-stack example topology contract regressed (cross-host URLs must
           derive from inventory host and ingress-port variables).
@@ -160,9 +160,9 @@
       ansible.builtin.assert:
         that:
           - _frontpage_defaults.aihorde_frontpage_repo_version is regex('^[0-9a-f]{40}$')
-          - _regen_defaults.regen_worker_repo_version is regex('^[0-9a-f]{40}$')
+          - _regen_defaults.horde_regen_worker_repo_version is regex('^[0-9a-f]{40}$')
           - _monitoring_defaults.horde_monitoring_grafana_dashboards_repo_ref is regex('^[0-9a-f]{40}$')
-          - _exporter_defaults.exporter_repo_ref is regex('^[0-9a-f]{40}$')
+          - _exporter_defaults.horde_stats_exporter_repo_ref is regex('^[0-9a-f]{40}$')
         fail_msg: >-
           All role defaults must pin source repos to full 40-char SHA commits
           (no branch names, no short hashes).
@@ -170,12 +170,12 @@
     - name: Assert exporter uv installer has checksum and version pinned
       ansible.builtin.assert:
         that:
-          - _exporter_defaults.exporter_uv_version is defined
-          - _exporter_defaults.exporter_uv_version is regex('^[0-9]+\.[0-9]+')
-          - _exporter_defaults.exporter_uv_installer_checksum is regex('^sha256:[0-9a-f]{64}$')
+          - _exporter_defaults.horde_stats_exporter_uv_version is defined
+          - _exporter_defaults.horde_stats_exporter_uv_version is regex('^[0-9]+\.[0-9]+')
+          - _exporter_defaults.horde_stats_exporter_uv_installer_checksum is regex('^sha256:[0-9a-f]{64}$')
         fail_msg: >-
-          horde_stats_exporter must pin exporter_uv_version and
-          exporter_uv_installer_checksum in defaults.
+          horde_stats_exporter must pin horde_stats_exporter_uv_version and
+          horde_stats_exporter_uv_installer_checksum in defaults.
 
 # ── Exporter template contracts ──────────────────────────────
 

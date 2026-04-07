@@ -10,9 +10,9 @@
     - packages
     - worker
 
-- name: Ensure worker user exists ({{ worker_username }})
+- name: Ensure worker user exists ({{ horde_regen_worker_username }})
   ansible.builtin.user:
-    name: "{{ worker_username }}"
+    name: "{{ horde_regen_worker_username }}"
     shell: /bin/bash
     groups:
       - video
@@ -22,37 +22,37 @@
 
 - name: Clone Horde github repository
   ansible.builtin.git:
-    repo: "{{ regen_worker_repo }}"
-    dest: /home/{{ worker_username }}/{{ worker_clone_dir }}
+    repo: "{{ horde_regen_worker_repo }}"
+    dest: /home/{{ horde_regen_worker_username }}/{{ horde_regen_worker_clone_dir }}
     clone: true
     update: true
-    version: "{{ regen_worker_repo_version }}"
+    version: "{{ horde_regen_worker_repo_version }}"
   notify: Restart AI Worker service
   tags: worker
 
-- name: Ensure git repo is owned by worker user ({{ worker_username }})
+- name: Ensure git repo is owned by worker user ({{ horde_regen_worker_username }})
   ansible.builtin.file:
-    path: /home/{{ worker_username }}/{{ worker_clone_dir }}
-    owner: "{{ worker_username }}"
-    group: "{{ worker_username }}"
+    path: /home/{{ horde_regen_worker_username }}/{{ horde_regen_worker_clone_dir }}
+    owner: "{{ horde_regen_worker_username }}"
+    group: "{{ horde_regen_worker_username }}"
     recurse: true
   tags: worker
 
-- name: Ensure worker_runtime_dir exists ({{ worker_runtime_dir }})
+- name: Ensure horde_regen_worker_runtime_dir exists ({{ horde_regen_worker_runtime_dir }})
   ansible.builtin.file:
-    path: /home/{{ worker_username }}/{{ worker_runtime_dir }}
-    owner: "{{ worker_username }}"
-    group: "{{ worker_username }}"
+    path: /home/{{ horde_regen_worker_username }}/{{ horde_regen_worker_runtime_dir }}
+    owner: "{{ horde_regen_worker_username }}"
+    group: "{{ horde_regen_worker_username }}"
     state: directory
     mode: "0755"
   tags:
     - worker
 
-- name: Ensure models_dir exists ({{ models_dir }})
+- name: Ensure horde_regen_worker_models_dir exists ({{ horde_regen_worker_models_dir }})
   ansible.builtin.file:
-    path: /home/{{ worker_username }}/{{ models_dir }}
-    owner: "{{ worker_username }}"
-    group: "{{ worker_username }}"
+    path: /home/{{ horde_regen_worker_username }}/{{ horde_regen_worker_models_dir }}
+    owner: "{{ horde_regen_worker_username }}"
+    group: "{{ horde_regen_worker_username }}"
     state: directory
     mode: "0755"
   tags:
@@ -61,9 +61,9 @@
 - name: Deploy bridgeData
   ansible.builtin.template:
     src: bridgeData.yaml.j2
-    dest: /home/{{ worker_username }}/{{ worker_runtime_dir }}/bridgeData.yaml
-    owner: "{{ worker_username }}"
-    group: "{{ worker_username }}"
+    dest: /home/{{ horde_regen_worker_username }}/{{ horde_regen_worker_runtime_dir }}/bridgeData.yaml
+    owner: "{{ horde_regen_worker_username }}"
+    group: "{{ horde_regen_worker_username }}"
     mode: "0640"
   no_log: true
   notify: Restart AI Worker service
@@ -71,96 +71,96 @@
     - worker
 
 - name: Ensure update-runtime is run for AMD GPUs
-  ansible.builtin.shell: /home/{{ worker_username }}/{{ worker_clone_dir }}/update-runtime-rocm.sh
+  ansible.builtin.shell: /home/{{ horde_regen_worker_username }}/{{ horde_regen_worker_clone_dir }}/update-runtime-rocm.sh
   become: true
-  become_user: "{{ worker_username }}"
+  become_user: "{{ horde_regen_worker_username }}"
   changed_when: true
   args:
     executable: /bin/bash
-    chdir: /home/{{ worker_username }}/{{ worker_clone_dir }}
-  register: update_runtime
+    chdir: /home/{{ horde_regen_worker_username }}/{{ horde_regen_worker_clone_dir }}
+  register: horde_regen_worker_update_runtime
   when:
-    - initialize is true
-    - amd_gpu is true
+    - horde_regen_worker_initialize is true
+    - horde_regen_worker_amd_gpu is true
   tags:
     - worker
-    - initialize
+    - horde_regen_worker_initialize
 
-- name: Show update_runtime output
+- name: Show horde_regen_worker_update_runtime output
   ansible.builtin.debug:
-    var: update_runtime
+    var: horde_regen_worker_update_runtime
   when:
-    - initialize is true
+    - horde_regen_worker_initialize is true
   tags:
     - worker
-    - initialize
+    - horde_regen_worker_initialize
     - debug
 
 - name: Ensure update-runtime is run for Nvidia GPUs
-  ansible.builtin.shell: /home/{{ worker_username }}/{{ worker_clone_dir }}/update-runtime.sh
+  ansible.builtin.shell: /home/{{ horde_regen_worker_username }}/{{ horde_regen_worker_clone_dir }}/update-runtime.sh
   become: true
-  become_user: "{{ worker_username }}"
+  become_user: "{{ horde_regen_worker_username }}"
   changed_when: true
   args:
     executable: /bin/bash
-    chdir: /home/{{ worker_username }}/{{ worker_clone_dir }}
-  register: update_runtime
+    chdir: /home/{{ horde_regen_worker_username }}/{{ horde_regen_worker_clone_dir }}
+  register: horde_regen_worker_update_runtime
   when:
-    - initialize is true
-    - amd_gpu is false
+    - horde_regen_worker_initialize is true
+    - horde_regen_worker_amd_gpu is false
   tags:
     - worker
-    - initialize
+    - horde_regen_worker_initialize
 
-- name: Show update_runtime output
+- name: Show horde_regen_worker_update_runtime output
   ansible.builtin.debug:
-    var: update_runtime
+    var: horde_regen_worker_update_runtime
   when:
-    - initialize is true
+    - horde_regen_worker_initialize is true
   tags:
     - worker
-    - initialize
+    - horde_regen_worker_initialize
     - debug
 
 - name: Ensure models are downloaded for the first time
-  ansible.builtin.shell:
-    /home/{{ worker_username }}/{{ worker_clone_dir }}/runtime-rocm.sh python -s /home/{{ worker_username }}/{{ worker_clone_dir
-    }}/download_models.py
+  ansible.builtin.shell: >
+    /home/{{ horde_regen_worker_username }}/{{ horde_regen_worker_clone_dir }}/runtime-rocm.sh
+    python -s /home/{{ horde_regen_worker_username }}/{{ horde_regen_worker_clone_dir }}/download_models.py
   become: true
-  become_user: "{{ worker_username }}"
+  become_user: "{{ horde_regen_worker_username }}"
   changed_when: true
   args:
     executable: /bin/bash
-    chdir: /home/{{ worker_username }}/{{ worker_runtime_dir }}
+    chdir: /home/{{ horde_regen_worker_username }}/{{ horde_regen_worker_runtime_dir }}
   when:
-    - initialize is true
-    - amd_gpu is true
+    - horde_regen_worker_initialize is true
+    - horde_regen_worker_amd_gpu is true
   tags:
     - worker
-    - initialize
+    - horde_regen_worker_initialize
 
 - name: Ensure models are downloaded for the first time
-  ansible.builtin.shell:
-    /home/{{ worker_username }}/{{ worker_clone_dir }}/runtime.sh python -s /home/{{ worker_username }}/{{ worker_clone_dir
-    }}/download_models.py
+  ansible.builtin.shell: >
+    /home/{{ horde_regen_worker_username }}/{{ horde_regen_worker_clone_dir }}/runtime.sh
+    python -s /home/{{ horde_regen_worker_username }}/{{ horde_regen_worker_clone_dir }}/download_models.py
   become: true
-  become_user: "{{ worker_username }}"
+  become_user: "{{ horde_regen_worker_username }}"
   changed_when: true
   args:
     executable: /bin/bash
-    chdir: /home/{{ worker_username }}/{{ worker_runtime_dir }}
+    chdir: /home/{{ horde_regen_worker_username }}/{{ horde_regen_worker_runtime_dir }}
   when:
-    - initialize is true
-    - amd_gpu is false
+    - horde_regen_worker_initialize is true
+    - horde_regen_worker_amd_gpu is false
   tags:
     - worker
-    - initialize
+    - horde_regen_worker_initialize
 
 - name: Ensure systemd directory exists
   ansible.builtin.file:
-    path: /home/{{ worker_username }}/.config/systemd/user/
-    owner: "{{ worker_username }}"
-    group: "{{ worker_username }}"
+    path: /home/{{ horde_regen_worker_username }}/.config/systemd/user/
+    owner: "{{ horde_regen_worker_username }}"
+    group: "{{ horde_regen_worker_username }}"
     mode: "0755"
     state: directory
   tags:
@@ -170,9 +170,9 @@
 - name: Ensure horde systemd services exist in userspace
   ansible.builtin.template:
     src: ai_horde_worker.j2
-    dest: /home/{{ worker_username }}/.config/systemd/user/{{ worker_service_name }}.service
-    owner: "{{ worker_username }}"
-    group: "{{ worker_username }}"
+    dest: /home/{{ horde_regen_worker_username }}/.config/systemd/user/{{ horde_regen_worker_service_name }}.service
+    owner: "{{ horde_regen_worker_username }}"
+    group: "{{ horde_regen_worker_username }}"
     mode: "0644"
   notify: Restart AI Worker service
   tags:
@@ -181,24 +181,24 @@
 
 - name: Ensure XDG_RUNTIME_DIR is set in user's .bashrc
   ansible.builtin.lineinfile:
-    path: /home/{{ worker_username }}/.bashrc
+    path: /home/{{ horde_regen_worker_username }}/.bashrc
     line: export XDG_RUNTIME_DIR=/run/user/$(id -u)
-    owner: "{{ worker_username }}"
-    group: "{{ worker_username }}"
+    owner: "{{ horde_regen_worker_username }}"
+    group: "{{ horde_regen_worker_username }}"
   tags:
     - worker
     - systemd
 
-- name: Enable lingering if needed ({{ worker_username }})
-  ansible.builtin.command: loginctl enable-linger {{ worker_username }}
+- name: Enable lingering if needed ({{ horde_regen_worker_username }})
+  ansible.builtin.command: loginctl enable-linger {{ horde_regen_worker_username }}
   args:
-    creates: /var/lib/systemd/linger/{{ worker_username }}
+    creates: /var/lib/systemd/linger/{{ horde_regen_worker_username }}
   tags:
     - worker
     - systemd
 
 # Needed for the next task
-- name: Find worker uid ({{ worker_username }})
+- name: Find worker uid ({{ horde_regen_worker_username }})
   ansible.builtin.getent:
     database: passwd
   tags:
@@ -209,14 +209,14 @@
   ansible.builtin.systemd:
     state: started
     daemon_reload: true
-    name: "{{ worker_service_name }}"
+    name: "{{ horde_regen_worker_service_name }}"
     enabled: true
     scope: user
   environment:
-    XDG_RUNTIME_DIR: "/run/user/{{ getent_passwd[worker_username].1 }}"
+    XDG_RUNTIME_DIR: "/run/user/{{ getent_passwd[horde_regen_worker_username].1 }}"
   become: true
-  become_user: "{{ worker_username }}"
-  register: service_started
+  become_user: "{{ horde_regen_worker_username }}"
+  register: horde_regen_worker_service_started
   tags:
     - worker
     - systemd

@@ -8,7 +8,7 @@
 #   Play 1 — AI-Horde backend  (native mode with HAProxy ingress)
 #   Play 2 — AiHordeFrontpage  (Angular SSR website, port 8006)
 #   Play 3 — Monitoring stack  (Mimir + Grafana + Prometheus + stats exporter)
-#   Play 4 — Regen worker      (connects to AI-Horde via horde_url)
+#   Play 4 — Regen worker      (connects to AI-Horde via horde_regen_worker_horde_url)
 #
 # Baseline ingress in this example uses non-privileged port 8080.
 # For dedicated ingress hosts, see the commented production overrides in Play 1.
@@ -99,7 +99,7 @@
         # Cross-host-safe endpoint derivation from inventory addressing.
         # Use localhost only when exporter runs on the same host namespace
         # as AI-Horde ingress.
-        exporter_api_base_url: "http://{{ horde_api_host }}:{{ horde_api_ingress_port }}/api/v2"
+        horde_stats_exporter_api_base_url: "http://{{ horde_api_host }}:{{ horde_api_ingress_port }}/api/v2"
       tags: [exporter]
 
 # ---------------------------------------------------------------------------
@@ -117,10 +117,10 @@
       vars:
         # Point workers at AI-Horde ingress using inventory-derived address.
         # Use localhost only for same-host-only deployments.
-        horde_url: "http://{{ horde_api_host }}:{{ horde_api_ingress_port }}"
-        api_key: "{{ vault_worker_api_key }}"
-        dreamer_name: "{{ inventory_hostname }}-dreamer"
-        max_power: 32
-        models_to_load:
+        horde_regen_worker_horde_url: "http://{{ horde_api_host }}:{{ horde_api_ingress_port }}"
+        horde_regen_worker_api_key: "{{ vault_worker_api_key }}"
+        horde_regen_worker_dreamer_name: "{{ inventory_hostname }}-dreamer"
+        horde_regen_worker_max_power: 32
+        horde_regen_worker_models_to_load:
           - TOP 5
       tags: [worker]

@@ -8,15 +8,15 @@
 
   vars:
     # Git ref to install (branch, tag, or commit hash)
-    # exporter_repo_ref: main
+    # horde_stats_exporter_repo_ref: main
 
     # Exporter configuration
-    exporter_port: 9150
-    exporter_api_base_url: "https://aihorde.net/api/v2"
+    horde_stats_exporter_port: 9150
+    horde_stats_exporter_api_base_url: "https://aihorde.net/api/v2"
 
     # Enable downsampling
-    exporter_enable_downsampling: true
-    exporter_prometheus_url: "http://localhost:9090"
+    horde_stats_exporter_enable_downsampling: true
+    horde_stats_exporter_prometheus_url: "http://localhost:9090"
 
   roles:
     - haidra.deployments.horde_stats_exporter
@@ -24,7 +24,7 @@
   post_tasks:
     - name: Verify exporter is running
       ansible.builtin.uri:
-        url: "http://localhost:{{ exporter_port }}/metrics"
+        url: "http://localhost:{{ horde_stats_exporter_port }}/metrics"
         return_content: true
       register: metrics
       retries: 5
@@ -33,4 +33,4 @@
 
     - name: Display exporter status
       ansible.builtin.debug:
-        msg: "AI Horde Stats Exporter is running on port {{ exporter_port }}"
+        msg: "AI Horde Stats Exporter is running on port {{ horde_stats_exporter_port }}"

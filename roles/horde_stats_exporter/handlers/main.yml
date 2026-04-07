@@ -8,10 +8,10 @@
 
 - name: Set venv ownership
   ansible.builtin.file:
-    path: "{{ exporter_install_dir }}/venv"
+    path: "{{ horde_stats_exporter_install_dir }}/venv"
     state: directory
-    owner: "{{ exporter_user }}"
-    group: "{{ exporter_user }}"
+    owner: "{{ horde_stats_exporter_user }}"
+    group: "{{ horde_stats_exporter_user }}"
     recurse: true
   become: true
 

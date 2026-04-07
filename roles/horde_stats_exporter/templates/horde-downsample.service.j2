@@ -5,16 +5,16 @@ Wants=network-online.target
 
 [Service]
 Type=oneshot
-User={{ exporter_user }}
-Group={{ exporter_user }}
-WorkingDirectory={{ exporter_install_dir }}
-ExecStart={{ exporter_install_dir }}/venv/bin/ai-horde-downsample \
-  --source-tenant {{ exporter_downsample_source_tenant }} \
-  --target-tenant {{ exporter_downsample_target_tenant }} \
-  --mimir-url {{ exporter_downsample_mimir_url }} \
-  --resolution {{ exporter_downsample_resolution }}
-StandardOutput=append:{{ exporter_log_file }}
-StandardError=append:{{ exporter_log_file }}
+User={{ horde_stats_exporter_user }}
+Group={{ horde_stats_exporter_user }}
+WorkingDirectory={{ horde_stats_exporter_install_dir }}
+ExecStart={{ horde_stats_exporter_install_dir }}/venv/bin/ai-horde-downsample \
+  --source-tenant {{ horde_stats_exporter_downsample_source_tenant }} \
+  --target-tenant {{ horde_stats_exporter_downsample_target_tenant }} \
+  --mimir-url {{ horde_stats_exporter_downsample_mimir_url }} \
+  --resolution {{ horde_stats_exporter_downsample_resolution }}
+StandardOutput=append:{{ horde_stats_exporter_log_file }}
+StandardError=append:{{ horde_stats_exporter_log_file }}
 
 [Install]
 WantedBy=multi-user.target
