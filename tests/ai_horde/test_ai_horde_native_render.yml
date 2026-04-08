@@ -203,6 +203,7 @@
     ai_horde_postgres_password: "test-password"
     ai_horde_secret_key: "test-secret-key"
     ai_horde_install_postgres: true
+    ai_horde_postgres_user: "aihorde"
   tasks:
     - name: Apply role with accepted local PostgreSQL host value
       ansible.builtin.include_role:
@@ -258,6 +259,7 @@
     ai_horde_postgres_password: "test-password"
     ai_horde_secret_key: "test-secret-key"
     ai_horde_install_postgres: true
+    ai_horde_postgres_user: "aihorde"
     ai_horde_postgres_host: "db.example.com"
   tasks:
     - name: Expect role to fail on invalid local PostgreSQL contract
@@ -282,6 +284,58 @@
         - name: Confirm fail-fast was correctly enforced
           ansible.builtin.debug:
             msg: "PASS — correctly rejected invalid local PostgreSQL host"
+
+- name: Test AI-Horde role fail-fast (local postgres superuser management not opted in)
+  hosts: testhost
+  become: true
+  vars:
+    ai_horde_deploy_mode: native
+    ai_horde_start_services: false
+    ai_horde_postgres_password: "test-password"
+    ai_horde_secret_key: "test-secret-key"
+    ai_horde_install_postgres: true
+    ai_horde_postgres_host: "127.0.0.1"
+    ai_horde_postgres_user: "postgres"
+  tasks:
+    - name: Expect role to fail on implicit postgres superuser management
+      block:
+        - name: Apply role (should fail)
+          ansible.builtin.include_role:
+            name: ai_horde
+
+        - name: Fail if role did not error
+          ansible.builtin.fail:
+            msg: "Role should have failed due to implicit postgres superuser management"
+      rescue:
+        - name: Assert failure was about explicit superuser opt-in
+          ansible.builtin.assert:
+            that:
+              - ansible_failed_result.msg is defined
+              - "'ai_horde_allow_postgres_superuser_management' in ansible_failed_result.msg"
+            fail_msg: >-
+              Expected postgres superuser guard failure, got:
+              {{ ansible_failed_result.msg | default('(no message)') }}
+
+        - name: Confirm fail-fast was correctly enforced
+          ansible.builtin.debug:
+            msg: "PASS — correctly rejected implicit postgres superuser management"
+
+- name: Test AI-Horde role allows local postgres superuser when explicitly opted in
+  hosts: testhost
+  become: true
+  vars:
+    ai_horde_deploy_mode: native
+    ai_horde_start_services: false
+    ai_horde_postgres_password: "test-password"
+    ai_horde_secret_key: "test-secret-key"
+    ai_horde_install_postgres: true
+    ai_horde_postgres_host: "127.0.0.1"
+    ai_horde_postgres_user: "postgres"
+    ai_horde_allow_postgres_superuser_management: true
+  tasks:
+    - name: Apply role with explicit superuser opt-in
+      ansible.builtin.include_role:
+        name: ai_horde
 
 - name: Test AI-Horde role fail-fast (local redis with remote host)
   hosts: testhost

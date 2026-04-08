@@ -52,6 +52,18 @@
       ai_horde_install_postgres=false.
   when: ai_horde_install_postgres | bool
 
+- name: Guard against implicit PostgreSQL superuser mutation
+  ansible.builtin.assert:
+    that:
+      - (ai_horde_postgres_user | lower) != 'postgres' or (ai_horde_allow_postgres_superuser_management | bool)
+    fail_msg: >-
+      ai_horde_install_postgres=true with ai_horde_postgres_user=postgres would
+      mutate the shared-cluster PostgreSQL superuser.
+      Use a dedicated application role (recommended), or set
+      ai_horde_allow_postgres_superuser_management=true as an explicit
+      bootstrap-only opt-in.
+  when: ai_horde_install_postgres | bool
+
 - name: Validate local Redis provisioning contract
   ansible.builtin.assert:
     that:
@@ -63,6 +75,34 @@
       ai_horde_redis_port=6379). To use external Redis, set
       ai_horde_install_redis=false.
   when: ai_horde_install_redis | bool
+
+- name: Derive host vCPU count for advisory sizing checks
+  ansible.builtin.set_fact:
+    _ai_horde_vcpu_count: "{{ (ansible_facts.processor_vcpus | default(ansible_facts.processor_nproc | default(0))) | int }}"
+
+- name: Warn when native instance count exceeds detected vCPU count
+  ansible.builtin.debug:
+    msg: >-
+      Advisory: ai_horde_instance_count={{ ai_horde_instance_count }} exceeds
+      detected vCPU count={{ _ai_horde_vcpu_count }}. Consider reducing
+      instance count or scale up host capacity.
+  when:
+    - (_ai_horde_vcpu_count | int) > 0
+    - (ai_horde_instance_count | int) > (_ai_horde_vcpu_count | int)
+
+- name: Compute projected DB pool footprint
+  ansible.builtin.set_fact:
+    _ai_horde_projected_db_pool_size: "{{ (ai_horde_instance_count | int) * (ai_horde_db_pool_size_per_instance | int) }}"
+
+- name: Warn when projected DB pool footprint exceeds advisory ceiling
+  ansible.builtin.debug:
+    msg: >-
+      Advisory: projected DB pool footprint is
+      {{ _ai_horde_projected_db_pool_size }}
+      (ai_horde_instance_count={{ ai_horde_instance_count }} *
+      ai_horde_db_pool_size_per_instance={{ ai_horde_db_pool_size_per_instance }}).
+      This exceeds the advisory threshold of 200 connections.
+  when: (_ai_horde_projected_db_pool_size | int) > 200
 
 # ── Optional local services ─────────────────────────────────
 - name: Include PostgreSQL provisioning

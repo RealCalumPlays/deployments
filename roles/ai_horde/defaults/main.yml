@@ -31,6 +31,9 @@ ai_horde_postgres_user: "postgres"
 ai_horde_postgres_db: "postgres"
 ai_horde_postgres_host: "127.0.0.1"
 ai_horde_postgres_port: 5432
+# Safety valve for local bootstrap mode: keep false to avoid mutating
+# shared-cluster postgres superuser credentials by accident.
+ai_horde_allow_postgres_superuser_management: false
 # Override for POSTGRES_URL fragment (host[:port]/db[?opts]). See README.
 ai_horde_postgres_url_override: ""
 
@@ -59,6 +62,7 @@ ai_horde_instance_count: 1
 # Waitress tuning. See README "Host-Class Sizing".
 ai_horde_waitress_threads: 45
 ai_horde_waitress_connection_limit: 1024
+# Advisory-only capacity signal used for warnings; does not change runtime DB config.
 ai_horde_db_pool_size_per_instance: 50
 
 ai_horde_user: "aihorde"
