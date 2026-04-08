@@ -52,20 +52,6 @@
   throttle: 1
   when: ai_horde_start_services | bool
 
-- name: Wait for restarted instance health
-  ansible.builtin.uri:
-    url: "http://{{ ai_horde_backend_host }}:{{ item }}/api/v2/status/heartbeat"
-    method: GET
-    status_code: 200
-  register: ai_horde__restart_health
-  until: ai_horde__restart_health.status == 200
-  retries: 20
-  delay: 3
-  become: true
-  loop: "{{ range(ai_horde_port | int, ai_horde_port | int + ai_horde_instance_count | int) | list }}"
-  throttle: 1
-  when: ai_horde_start_services | bool
-
 # ── Optional services ────────────────────────────────────────
 - name: Restart PostgreSQL
   ansible.builtin.systemd:

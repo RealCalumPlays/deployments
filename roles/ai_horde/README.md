@@ -36,15 +36,15 @@ Ownership and permission model in native mode:
 
 PostgreSQL and Redis are expected to be external by default. Set
 `ai_horde_install_postgres` and/or `ai_horde_install_redis` to optionally
-provision them locally.
+provision them locally for bootstrap/dev scenarios.
 
 ## Host-Class Sizing (Native Mode)
 
 In native mode, the role passes `--waitress_threads` and
 `--waitress_connection_limit` to the AI-Horde server process via systemd. The
-role emits advisory warnings when the instance count exceeds 1 per vCPU or when
-the projected DB pool footprint (instances × `ai_horde_db_pool_size_per_instance`)
-exceeds 200 connections.
+role emits advisory warnings when host facts are available and the instance
+count exceeds detected vCPU count, or when the projected DB pool footprint
+(instances × `ai_horde_db_pool_size_per_instance`) exceeds 200 connections.
 
 | Variable | Default | Effect |
 | ---- | ---- | ---- |
@@ -161,6 +161,7 @@ When `ai_horde_start_services: false`, the role runs in render-only mode:
 | `ai_horde_postgres_db`    | `postgres`     | PostgreSQL database name             |
 | `ai_horde_postgres_host`  | `127.0.0.1`   | PostgreSQL host (native mode)        |
 | `ai_horde_postgres_port`  | `5432`         | PostgreSQL port (native mode)        |
+| `ai_horde_allow_postgres_superuser_management` | `false` | Safety valve for local bootstrap mode (`true` allows managing `postgres` superuser explicitly) |
 | `ai_horde_postgres_url_override` | `""`   | Advanced override for `POSTGRES_URL` fragment (`host[:port]/db[?options]`) |
 | `ai_horde_redis_host`     | `127.0.0.1`   | Redis host (native mode)             |
 | `ai_horde_redis_port`     | `6379`         | Must remain `6379` in native mode (AI-Horde runtime currently assumes fixed Redis port) |
@@ -200,6 +201,7 @@ Native `POSTGRES_URL` rendering contract:
 | `ai_horde_uv_allow_unverified_installer` | `false`           | Explicit opt-in to skip installer checksum verification |
 | `ai_horde_install_postgres` | `false`                          | Optionally provision local PostgreSQL             |
 | `ai_horde_install_redis`    | `false`                          | Optionally provision local Redis                  |
+| `ai_horde_allow_postgres_superuser_management` | `false`      | Explicit bootstrap-only opt-in for managing `postgres` superuser |
 | `ai_horde_install_haproxy`  | `false`                          | Optionally install HAProxy for load balancing     |
 | `ai_horde_haproxy_port`     | `8080`                           | HAProxy frontend listen port (`8080` shared-host baseline; use `80/443` only on dedicated ingress hosts) |
 | `ai_horde_haproxy_mode`     | `safe_edit`                      | `safe_edit` (marker-bounded, shared hosts) or `standalone` (full-file ownership) |
@@ -252,12 +254,16 @@ depend on schema changes.
 - In native mode, the role also fails fast on unsupported contract
   combinations (for example: non-6379 Redis port, or `ai_horde_install_postgres=true`
   with a non-local PostgreSQL host).
-- Native mode emits advisory capacity warnings based on host vCPU count
-  and projected DB pool footprint.
+- In native mode, local PostgreSQL bootstrap refuses implicit `postgres`
+  superuser mutation unless
+  `ai_horde_allow_postgres_superuser_management=true` is set explicitly.
+- Native mode emits advisory capacity warnings when host CPU facts are
+  available and when projected DB pool footprint exceeds the advisory ceiling.
 - Native mode uses systemd security hardening: `ProtectSystem=strict`,
   `ProtectHome=true`, `NoNewPrivileges=true`, `PrivateTmp=true`.
-- Local PostgreSQL provisioning (when enabled) uses `scram-sha-256`
-  authentication. No destructive operations are performed by the role.
+- Local PostgreSQL provisioning (when enabled) is bootstrap-oriented,
+  uses `scram-sha-256` authentication, and performs no destructive
+  operations.
 - Native uv installer fetch is checksum-verified by default. Unverified
   installer usage requires explicit opt-in via
   `ai_horde_uv_allow_unverified_installer=true`.
@@ -349,6 +355,8 @@ Before using privileged ingress (`80/443`), ensure all are true:
         ai_horde_instance_count: 4
         ai_horde_install_postgres: true
         ai_horde_install_redis: true
+        ai_horde_postgres_user: "aihorde"
+        ai_horde_postgres_db: "aihorde"
         ai_horde_install_haproxy: true
         ai_horde_haproxy_mode: safe_edit
         ai_horde_haproxy_port: 8080
@@ -375,6 +383,8 @@ passes these values from `ai_horde_waitress_threads` and
 `ai_horde_waitress_connection_limit` to each systemd instance.
 
 Database pool tuning (SQLAlchemy `pool_size`) remains hardcoded upstream.
+`ai_horde_db_pool_size_per_instance` is advisory-only for sizing warnings;
+it does not modify upstream runtime DB pool configuration.
 Tracking for further upstream runtime follow-ups is maintained in:
 
 - `docs/plans/ai-native-gaps-followup/upstream-runtime-tunability-tracking.md`
