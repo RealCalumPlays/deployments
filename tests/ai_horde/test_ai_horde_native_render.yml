@@ -571,4 +571,3 @@
         - name: Confirm fail-fast was correctly enforced
           ansible.builtin.debug:
             msg: "PASS — correctly rejected POSTGRES_URL override with scheme"
-

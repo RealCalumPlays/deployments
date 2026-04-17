@@ -76,6 +76,6 @@
     src: "{{ horde_monitoring_alerting_rules_dir }}/{{ horde_monitoring_recording_rules_file }}"
     status_code: [202, 200]
   become: true
-  when: 
+  when:
     - horde_monitoring_install_recording_rules | default(true) | bool
     - horde_monitoring_start_services | bool
