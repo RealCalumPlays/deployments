@@ -49,25 +49,28 @@ monitoring stack deployed by the `horde_monitoring` Ansible role.
 
 ---
 
-## S3-Compatible Storage (RustFS)
+## S3-Compatible Storage (Garage / External)
 
 **Variables:** `horde_monitoring_s3_image`, `horde_monitoring_s3_mc_image`
 
-**Release notes:**
-[RustFS releases](https://github.com/rustfs/rustfs/releases)
+**References:**
+- [Garage documentation](https://garagehq.deuxfleurs.fr/documentation/)
+- Your managed/external S3 provider's upgrade notes (when `horde_monitoring_s3_deployment_mode: external`)
 
 **Key considerations:**
 
-- RustFS is currently alpha software (`rustfs/rustfs:1.0.0-alpha.93`). For
-  production use, operators may override `horde_monitoring_s3_image` with any
-  S3-compatible backend (e.g., SeaweedFS, Garage, or a hosted S3 service).
+- External managed S3 is the preferred production strategy. In external mode,
+  this role does not manage the storage server image lifecycle.
+- Embedded mode uses Garage (`dxflrs/garage:v2.1.0`) and is best suited to
+  local/single-host deployments.
 - Keep the `mc` (MinIO Client) image roughly contemporary — large version
   gaps can cause S3 API incompatibilities.
-- After upgrading, verify the health endpoint:
+- In embedded mode, verify Garage health on the admin API endpoint:
   ```bash
-  curl -s http://127.0.0.1:9000/health
+  curl -s http://127.0.0.1:3903/health
   ```
-- S3 data at `/var/lib/s3-data` is persistent and survives upgrades.
+- Embedded Garage data at `/var/lib/garage/data` and `/var/lib/garage/meta`
+  is persistent and survives upgrades.
 
 ---
 

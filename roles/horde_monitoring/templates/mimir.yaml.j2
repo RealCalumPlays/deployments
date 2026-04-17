@@ -26,6 +26,7 @@ common:
       secret_access_key: {{ horde_monitoring_s3_secret_key }}
       insecure: {{ horde_monitoring_s3_insecure | bool | lower }}
       bucket_lookup_type: {{ 'path' if (horde_monitoring_s3_force_path_style | bool) else 'auto' }}
+      region: {{ horde_monitoring_s3_region }}
 {% endif %}
 
 blocks_storage:

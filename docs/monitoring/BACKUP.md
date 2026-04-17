@@ -181,25 +181,30 @@ expiry policy, and accidental deletions can be recovered.
    ansible-playbook -i inventory.yml horde_monitoring_stack.yml
    ```
 
-2. **Wait for S3 storage to be healthy:**
+2. **Wait for S3 storage to be healthy/reachable:**
+
+   - Embedded Garage default:
 
    ```bash
-   curl -f http://127.0.0.1:9000/health
+   curl -f http://127.0.0.1:3903/health
    ```
+
+   - External mode: use your provider-specific health check, or verify connectivity with `mc alias set` against your external endpoint.
 
 3. **Restore blocks and ruler data from backup:**
 
    ```bash
    docker run --rm --network host minio/mc:RELEASE.2025-08-13T08-35-41Z /bin/sh -c "\
-     mc alias set local http://127.0.0.1:9000 <s3-access-key> <s3-secret-key>; \
+       mc alias set local <s3-endpoint> <s3-access-key> <s3-secret-key>; \
      mc alias set remote <backup-endpoint> <access-key> <secret-key>; \
      mc mirror remote/<bucket>-blocks local/mimir-blocks; \
      mc mirror remote/<bucket>-ruler local/mimir-ruler; \
    "
    ```
 
-   Replace `<s3-access-key>`, `<s3-secret-key>`, `<backup-endpoint>`,
+    Replace `<s3-endpoint>`, `<s3-access-key>`, `<s3-secret-key>`, `<backup-endpoint>`,
    `<access-key>`, `<secret-key>`, and `<bucket>` with your actual values.
+    In embedded mode, `<s3-endpoint>` is typically `http://127.0.0.1:3900`.
 
 4. **Restart Mimir** to pick up restored blocks:
 
@@ -215,7 +220,7 @@ expiry policy, and accidental deletions can be recovered.
 
     # Extract grafana.db from the restored ruler bucket to host /tmp
     docker run --rm --network host -v /tmp:/host-tmp minio/mc:RELEASE.2025-08-13T08-35-41Z /bin/sh -c "\
-     mc alias set local http://127.0.0.1:9000 <s3-access-key> <s3-secret-key>; \
+       mc alias set local <s3-endpoint> <s3-access-key> <s3-secret-key>; \
        mc cp local/mimir-ruler/grafana-backup/grafana.db /host-tmp/grafana.db; \
    "
     cp /tmp/grafana.db /var/lib/grafana/grafana.db

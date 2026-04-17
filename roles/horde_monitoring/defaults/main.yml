@@ -33,7 +33,7 @@ horde_monitoring_mimir_runtime_config_period: "10s"
 # Provides the long-term block storage backend for Mimir, Loki, Tempo, and Pyroscope.
 #
 # Deployment modes:
-# - embedded: role deploys a local RustFS container (default; convenient for local dev)
+# - embedded: role deploys a local Garage container (default; convenient for local dev)
 # - external: role does not deploy storage; point endpoint vars at an existing S3 backend
 #
 # The role explicitly supports any Mimir-compatible S3 backend by configuring
@@ -43,48 +43,62 @@ horde_monitoring_s3_deployment_mode: "embedded"
 
 # Operator-managed S3 flag.
 # When true, the monitoring role assumes the operator manages S3 lifecycle
-# externally (e.g. via the standalone rustfs role on another host). The role:
+# externally (e.g. via the standalone garage role on another host). The role:
 # - Skips S3 reachability pre-flight checks at deploy time
 # - Still configures Mimir/Loki/Tempo/Pyroscope to point at the endpoint
 # - Does not deploy any S3 containers (same as external mode)
 #
-# Use this when S3 is deployed to a different host (e.g. via the rustfs role)
+# Use this when S3 is deployed to a different host (e.g. via the garage role)
 # and you want to avoid false failures if S3 is deployed in a separate play
 # or is temporarily unreachable during the monitoring deploy.
 horde_monitoring_s3_operator_managed: false
 
 # S3 endpoint used by Mimir/Loki/Tempo/Pyroscope configs (host:port, no scheme).
 # Embedded default resolves via Docker network service name.
-horde_monitoring_s3_endpoint: "s3-store:9000"
+horde_monitoring_s3_endpoint: "s3-store:3900"
 
 # Full URLs used by health checks and mc alias operations.
 # - internal_url: endpoint as seen from compose-network containers
 # - api_url: endpoint as seen from the host/systemd context
-horde_monitoring_s3_internal_url: "http://s3-store:9000"
+horde_monitoring_s3_internal_url: "http://s3-store:3900"
 horde_monitoring_s3_api_url: "http://127.0.0.1:{{ horde_monitoring_s3_api_port }}"
-horde_monitoring_s3_healthcheck_url: "{{ horde_monitoring_s3_api_url }}/health"
+# Garage health is on the admin API port, not the S3 API port.
+horde_monitoring_s3_healthcheck_url: "http://127.0.0.1:{{ horde_monitoring_s3_admin_port }}/health"
 # Wait for S3 health endpoint before checking Mimir readiness.
 # Default is mode-aware:
-# - embedded: true (local RustFS exposes /health)
+# - embedded: true (local Garage exposes /health on admin port)
 # - external: false (many providers do not expose a compatible /health endpoint)
 horde_monitoring_s3_wait_for_ready: "{{ horde_monitoring_s3_deployment_mode == 'embedded' }}"
 
 # S3 client behavior flags for all backends.
 horde_monitoring_s3_insecure: true
 horde_monitoring_s3_force_path_style: true
+# S3 region — must match the s3_region configured in the Garage toml.
+horde_monitoring_s3_region: "garage"
 
-# Embedded RustFS image defaults
-horde_monitoring_s3_image: "rustfs/rustfs:1.0.0-alpha.93"
+# Embedded Garage S3 image defaults
+horde_monitoring_s3_image: "dxflrs/garage:v2.1.0"
+# mc (MinIO client) image used for external mode bucket management.
 horde_monitoring_s3_mc_image: "minio/mc:RELEASE.2025-08-13T08-35-41Z"
-horde_monitoring_s3_api_port: 9000
-horde_monitoring_s3_console_port: 9001
-# Persistent data directory — all S3 object data lives here.
-# Place on a dedicated volume/partition in production for isolation.
-# RustFS runs as UID 10001; this directory is owned by that UID.
-horde_monitoring_s3_data_dir: "/var/lib/s3-data"
-horde_monitoring_s3_embedded_uid: 10001
-horde_monitoring_s3_embedded_gid: 10001
-horde_monitoring_s3_access_key: "mimir"
+horde_monitoring_s3_api_port: 3900
+# Admin API port — used for health checks and embedded mode bootstrap.
+horde_monitoring_s3_admin_port: 3903
+horde_monitoring_s3_rpc_port: 3901
+# Persistent directories for Garage object and metadata storage.
+horde_monitoring_s3_data_dir: "/var/lib/garage/data"
+horde_monitoring_s3_metadata_dir: "/var/lib/garage/meta"
+horde_monitoring_s3_config_dir: "/etc/garage"
+# Garage admin token — used for admin API auth (required for embedded mode bootstrap).
+horde_monitoring_s3_admin_token: "changeme-s3-admin-token"
+# Garage RPC secret — 32-byte hex for inter-node RPC authentication.
+horde_monitoring_s3_rpc_secret: "changeme-s3-rpc-secret"
+# Node capacity for embedded mode layout assignment.
+horde_monitoring_s3_capacity: "1 TB"
+# Garage key ID used by embedded Garage mode S3 clients (GK + 24 hex chars).
+# In external mode, this can be any provider-compatible access key format.
+horde_monitoring_s3_access_key: "CHANGE_ME_GARAGE_ACCESS_KEY_ID"
+# Human-readable embedded Garage key name used by bucket grant commands.
+horde_monitoring_s3_access_key_name: "mimir"
 horde_monitoring_s3_secret_key: "changeme-s3-secret"
 # Automatically create required buckets via mc init job.
 # Default is mode-aware:
@@ -257,12 +271,32 @@ horde_monitoring_install_host_disk_alerts: true
 horde_monitoring_host_filesystem_metrics_available: false
 horde_monitoring_alerting_rules_dir: "/etc/prometheus/rules"
 horde_monitoring_alerting_rules_file: "monitoring-stack.rules"
+
+# Recording rules (Plan 013, Phase E) — pre-compute aggregations used by
+# dashboards and alerts. Disabling them does not break anything; dashboards
+# will fall back to on-the-fly queries.
+horde_monitoring_install_recording_rules: true
+horde_monitoring_recording_rules_file: "monitoring-stack.recording.rules"
 # Job names must match the job_name in your Prometheus scrape_configs
 horde_monitoring_mimir_job_name: "mimir"
 horde_monitoring_s3_job_name: "s3"
 horde_monitoring_loki_job_name: "loki"
 horde_monitoring_tempo_job_name: "tempo"
 horde_monitoring_pyroscope_job_name: "pyroscope"
+horde_monitoring_prometheus_job_name: "prometheus"
+horde_monitoring_horde_exporter_job_name: "horde-exporter"
+horde_monitoring_postgres_job_name: "postgres"
+
+# Application-level alerts (AI Horde API health via the stats exporter).
+# Requires the horde-exporter scrape target in Prometheus.
+horde_monitoring_install_app_alerts: true
+
+# Prometheus self-monitoring alerts (remote write, rule evaluation, targets).
+horde_monitoring_install_prometheus_alerts: true
+
+# PostgreSQL alerts (via postgres_exporter).
+# Set to true when postgres_exporter is deployed and scraped by Prometheus.
+horde_monitoring_install_postgres_alerts: false
 
 # ---------------------------------------------------------------------------
 # Loki (log aggregation — Docker-based, monolithic mode, S3-compatible storage)

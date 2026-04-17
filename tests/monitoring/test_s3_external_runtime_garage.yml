@@ -3,7 +3,7 @@
 # idempotency: skip
 # risk: deploy-safety, fail-fast, operational
 # Runtime integration test: boot a real Garage S3 backend and verify
-# horde_monitoring works in external S3 mode without embedded RustFS.
+# horde_monitoring works in external S3 mode with a standalone Garage instance.
 # This test intentionally runs on localhost (not the systemd test container)
 # so it can use the host Docker daemon.
 

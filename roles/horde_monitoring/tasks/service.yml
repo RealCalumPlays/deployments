@@ -40,6 +40,196 @@
     - horde_monitoring_start_services | bool
     - horde_monitoring__mimir_container_state.stdout | default('false') != 'true'
 
+# --- Embedded Garage cluster initialization via CLI ---
+# Uses docker exec to run the /garage CLI binary inside the running container.
+# This replaces the fragile curl/JSON-parsing sidecar approach.
+
+- name: Wait for embedded Garage to accept CLI commands
+  ansible.builtin.command:
+    cmd: docker exec s3-store /garage -c /etc/garage.toml status
+  register: horde_monitoring__garage_cli_ready
+  changed_when: false
+  until: horde_monitoring__garage_cli_ready.rc == 0
+  retries: 15
+  delay: 3
+  become: true
+  when:
+    - horde_monitoring_start_services | bool
+    - horde_monitoring_mimir_enable_s3 | bool
+    - horde_monitoring_s3_deployment_mode == 'embedded'
+
+- name: Get embedded Garage node ID
+  ansible.builtin.command:
+    cmd: docker exec s3-store /garage -c /etc/garage.toml node id
+  register: horde_monitoring__garage_node_id_raw
+  changed_when: false
+  become: true
+  when:
+    - horde_monitoring_start_services | bool
+    - horde_monitoring_mimir_enable_s3 | bool
+    - horde_monitoring_s3_deployment_mode == 'embedded'
+
+- name: Parse embedded Garage node ID for layout assignment
+  ansible.builtin.set_fact:
+    horde_monitoring__garage_node_id: >-
+      {{ (horde_monitoring__garage_node_id_raw.stdout
+          | regex_findall('([0-9a-f]{16,64})@') | first)
+         | default('', true) }}
+  when:
+    - horde_monitoring_start_services | bool
+    - horde_monitoring_mimir_enable_s3 | bool
+    - horde_monitoring_s3_deployment_mode == 'embedded'
+
+- name: Check if embedded Garage layout is already applied
+  ansible.builtin.uri:
+    url: "{{ horde_monitoring_s3_healthcheck_url }}"
+    method: GET
+    status_code: [200, 503]
+  register: horde_monitoring__garage_health_precheck
+  become: true
+  when:
+    - horde_monitoring_start_services | bool
+    - horde_monitoring_mimir_enable_s3 | bool
+    - horde_monitoring_s3_deployment_mode == 'embedded'
+
+- name: Assign embedded Garage single-node layout
+  ansible.builtin.command:
+    argv:
+      - docker
+      - exec
+      - s3-store
+      - /garage
+      - -c
+      - /etc/garage.toml
+      - layout
+      - assign
+      - "{{ horde_monitoring__garage_node_id }}"
+      - --zone
+      - dc1
+      - --capacity
+      - "{{ horde_monitoring_s3_capacity | human_to_bytes }}"
+  become: true
+  when:
+    - horde_monitoring_start_services | bool
+    - horde_monitoring_mimir_enable_s3 | bool
+    - horde_monitoring_s3_deployment_mode == 'embedded'
+    - horde_monitoring__garage_health_precheck.status | default(503) == 503
+
+- name: Apply embedded Garage layout (version 1)
+  ansible.builtin.command:
+    argv:
+      - docker
+      - exec
+      - s3-store
+      - /garage
+      - -c
+      - /etc/garage.toml
+      - layout
+      - apply
+      - --version
+      - "1"
+  become: true
+  when:
+    - horde_monitoring_start_services | bool
+    - horde_monitoring_mimir_enable_s3 | bool
+    - horde_monitoring_s3_deployment_mode == 'embedded'
+    - horde_monitoring__garage_health_precheck.status | default(503) == 503
+
+- name: Import embedded Garage S3 access key
+  ansible.builtin.command:
+    argv:
+      - docker
+      - exec
+      - s3-store
+      - /garage
+      - -c
+      - /etc/garage.toml
+      - key
+      - import
+      - --yes
+      - -n
+      - "{{ horde_monitoring_s3_access_key_name }}"
+      - "{{ horde_monitoring_s3_access_key }}"
+      - "{{ horde_monitoring_s3_secret_key }}"
+  register: horde_monitoring__garage_key_import
+  changed_when: horde_monitoring__garage_key_import.rc == 0
+  failed_when: >-
+    horde_monitoring__garage_key_import.rc != 0 and
+    ('KeyAlreadyExists' not in
+      ((horde_monitoring__garage_key_import.stdout | default('')) ~ ' ' ~ (horde_monitoring__garage_key_import.stderr | default(''))))
+  become: true
+  no_log: true
+  when:
+    - horde_monitoring_start_services | bool
+    - horde_monitoring_mimir_enable_s3 | bool
+    - horde_monitoring_s3_deployment_mode == 'embedded'
+
+- name: Build list of embedded Garage buckets to create
+  ansible.builtin.set_fact:
+    horde_monitoring__garage_buckets: >-
+      {{
+        [horde_monitoring_s3_blocks_bucket, horde_monitoring_s3_ruler_bucket]
+        + ((horde_monitoring_install_loki | bool) | ternary([horde_monitoring_loki_chunks_bucket], []))
+        + ((horde_monitoring_install_tempo | bool) | ternary([horde_monitoring_tempo_traces_bucket], []))
+        + ((horde_monitoring_install_pyroscope | bool) | ternary([horde_monitoring_pyroscope_blocks_bucket], []))
+      }}
+  when:
+    - horde_monitoring_start_services | bool
+    - horde_monitoring_mimir_enable_s3 | bool
+    - horde_monitoring_s3_deployment_mode == 'embedded'
+
+- name: Create embedded Garage buckets
+  ansible.builtin.command:
+    argv:
+      - docker
+      - exec
+      - s3-store
+      - /garage
+      - -c
+      - /etc/garage.toml
+      - bucket
+      - create
+      - "{{ item }}"
+  register: horde_monitoring__garage_bucket_create
+  changed_when: horde_monitoring__garage_bucket_create.rc == 0
+  failed_when: >-
+    horde_monitoring__garage_bucket_create.rc != 0 and
+    ('BucketAlreadyExists' not in
+      ((horde_monitoring__garage_bucket_create.stdout | default('')) ~ ' ' ~ (horde_monitoring__garage_bucket_create.stderr | default(''))))
+  become: true
+  loop: "{{ horde_monitoring__garage_buckets }}"
+  when:
+    - horde_monitoring_start_services | bool
+    - horde_monitoring_mimir_enable_s3 | bool
+    - horde_monitoring_s3_deployment_mode == 'embedded'
+
+- name: Grant embedded Garage bucket permissions
+  ansible.builtin.command:
+    argv:
+      - docker
+      - exec
+      - s3-store
+      - /garage
+      - -c
+      - /etc/garage.toml
+      - bucket
+      - allow
+      - --read
+      - --write
+      - --owner
+      - "{{ item }}"
+      - --key
+      - "{{ horde_monitoring_s3_access_key_name }}"
+  register: horde_monitoring__garage_bucket_allow
+  changed_when: horde_monitoring__garage_bucket_allow.rc == 0
+  failed_when: horde_monitoring__garage_bucket_allow.rc != 0
+  become: true
+  loop: "{{ horde_monitoring__garage_buckets }}"
+  when:
+    - horde_monitoring_start_services | bool
+    - horde_monitoring_mimir_enable_s3 | bool
+    - horde_monitoring_s3_deployment_mode == 'embedded'
+
 - name: Wait for S3 storage health endpoint when enabled
   ansible.builtin.uri:
     url: "{{ horde_monitoring_s3_healthcheck_url }}"

@@ -48,6 +48,12 @@
         state: absent
       become: true
 
+    - name: Clean stale recording rules from prior runs
+      ansible.builtin.file:
+        path: /etc/prometheus/rules/monitoring-stack.recording.rules
+        state: absent
+      become: true
+
   post_tasks:
     - name: Read rendered Mimir runtime overrides
       ansible.builtin.slurp:
@@ -77,6 +83,17 @@
         that:
           - not _rules_file.stat.exists
         fail_msg: "Alerting rules should be absent when horde_monitoring_install_alerting_rules=false"
+
+    - name: Check recording rules file is absent (disabled with alerting)
+      ansible.builtin.stat:
+        path: /etc/prometheus/rules/monitoring-stack.recording.rules
+      register: _recording_rules_file
+
+    - name: Assert recording rules were NOT rendered
+      ansible.builtin.assert:
+        that:
+          - not _recording_rules_file.stat.exists
+        fail_msg: "Recording rules should be absent when horde_monitoring_install_alerting_rules=false"
 
     - name: Check backup systemd service was rendered
       ansible.builtin.stat:

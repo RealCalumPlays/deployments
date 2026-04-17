@@ -28,7 +28,9 @@
     horde_monitoring_configure_firewall: false
     horde_monitoring_configure_haproxy: false
     horde_monitoring_grafana_admin_password: "test-runtime-pass"
-    horde_monitoring_s3_secret_key: "test-s3-secret-12345"
+    horde_monitoring_s3_access_key: "GK00112233445566778899aabb"
+    horde_monitoring_s3_access_key_name: "runtime-test-key"
+    horde_monitoring_s3_secret_key: "00112233445566778899aabbccddeeff00112233445566778899aabbccddeeff"
     horde_monitoring_application_tenant_id: "app-test"
     horde_monitoring_infrastructure_tenant_id: "infra-test"
     horde_monitoring_public_tenant_id: "public-test"

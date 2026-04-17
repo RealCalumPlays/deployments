@@ -1,0 +1,71 @@
+# Recording rules for the AI Horde monitoring stack
+# Managed by Ansible (horde_monitoring role) — do not edit manually
+#
+# Recording rules pre-compute aggregations so dashboards and alerts can
+# reference compact time series instead of re-running expensive sums on
+# every refresh. Naming follows the Prometheus convention:
+#   level:metric:operation
+#
+# Rule groups:
+#   - horde-app:recording    application-level aggregates
+#   - mimir:recording        stack ingestion rates
+#   - host:recording         host CPU utilisation (expensive)
+#
+# Placed in the Prometheus rules directory alongside alerting rules and
+# loaded automatically by the rule_files glob.
+
+groups:
+{% if horde_monitoring_install_app_alerts | default(true) | bool %}
+  - name: horde-app:recording
+    interval: 30s
+    rules:
+      # API availability (0 or 1), averaged so SLI dashboards can show a
+      # smooth percentage. Uses the exporter heartbeat metric horde_api_up.
+      - record: horde:api_availability:avg5m
+        expr: avg_over_time(horde_api_up[5m])
+
+      # Active worker counts by type, stripped of per-instance labels.
+      - record: horde:workers_active:by_type
+        expr: sum by (type) (horde_performance_worker_count)
+
+      # Smoothed queue drain estimate for dashboard display.
+      - record: horde:queue_drain_seconds:avg5m
+        expr: avg_over_time(horde_performance_estimated_queue_drain_seconds[5m])
+{% endif %}
+
+  - name: mimir:recording
+    interval: 30s
+    rules:
+      # Mimir ingestion rate (samples/sec) — useful for stack-health
+      # dashboards and capacity trending.
+      - record: mimir:ingestion_rate:rate5m
+        expr: >-
+          sum(rate(cortex_ingester_ingested_samples_total{job="{{ horde_monitoring_mimir_job_name }}"}[5m]))
+
+      # Request rate split by status class, for error-ratio panels.
+      - record: mimir:request_errors:ratio5m
+        expr: >-
+          (
+            sum(rate(cortex_request_duration_seconds_count{job="{{ horde_monitoring_mimir_job_name }}", status_code=~"5.."}[5m]))
+          /
+            clamp_min(sum(rate(cortex_request_duration_seconds_count{job="{{ horde_monitoring_mimir_job_name }}"}[5m])), 1)
+          )
+
+{% if horde_monitoring_install_host_disk_alerts | default(true) | bool %}
+  - name: host:recording
+    interval: 30s
+    rules:
+      # Per-instance CPU utilisation %, computed from idle. Expensive to
+      # re-compute on every dashboard refresh because it involves a rate()
+      # over node_cpu_seconds_total with a mode filter.
+      - record: host:cpu_utilisation:avg5m
+        expr: >-
+          100 - (avg by (instance) (rate(node_cpu_seconds_total{mode="idle"}[5m])) * 100)
+
+      # Memory utilisation % per instance.
+      - record: host:memory_utilisation:ratio
+        expr: >-
+          (
+            node_memory_MemTotal_bytes - node_memory_MemAvailable_bytes
+          ) / clamp_min(node_memory_MemTotal_bytes, 1)
+{% endif %}

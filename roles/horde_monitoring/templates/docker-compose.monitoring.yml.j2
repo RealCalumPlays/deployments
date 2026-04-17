@@ -13,16 +13,13 @@ services:
       horde.logs: "true"
       horde.app: "monitoring"
       horde.component: "s3-store"
-    command: ["/data"]
-    environment:
-      - "RUSTFS_ACCESS_KEY={{ horde_monitoring_s3_access_key }}"
-      - "RUSTFS_SECRET_KEY={{ horde_monitoring_s3_secret_key }}"
-      - "RUSTFS_CONSOLE_ENABLE=true"
-    ports:
-      - "127.0.0.1:{{ horde_monitoring_s3_api_port }}:9000"
-      - "127.0.0.1:{{ horde_monitoring_s3_console_port }}:9001"
     volumes:
-      - {{ horde_monitoring_s3_data_dir }}:/data
+      - {{ horde_monitoring_s3_config_dir }}/garage.toml:/etc/garage.toml:ro
+      - {{ horde_monitoring_s3_metadata_dir }}:/var/lib/garage/meta
+      - {{ horde_monitoring_s3_data_dir }}:/var/lib/garage/data
+    ports:
+      - "127.0.0.1:{{ horde_monitoring_s3_api_port }}:3900"
+      - "127.0.0.1:{{ horde_monitoring_s3_admin_port }}:3903"
     restart: unless-stopped
     deploy:
       resources:
@@ -33,17 +30,10 @@ services:
       options:
         max-size: "25m"
         max-file: "3"
-    healthcheck:
-      test: ["CMD", "curl", "-f", "http://localhost:9000/health"]
-      interval: 30s
-      timeout: 5s
-      retries: 5
-      start_period: 10s
     networks:
       - monitoring
-{% endif %}
 
-{% if horde_monitoring_mimir_enable_s3 | bool and horde_monitoring_s3_manage_buckets | bool %}
+{% elif horde_monitoring_mimir_enable_s3 | bool and horde_monitoring_s3_manage_buckets | bool %}
   s3-init:
     image: {{ horde_monitoring_s3_mc_image }}
     container_name: s3-init
@@ -71,11 +61,6 @@ services:
       options:
         max-size: "10m"
         max-file: "2"
-{% if horde_monitoring__embedded_s3 %}
-    depends_on:
-      s3-store:
-        condition: service_healthy
-{% endif %}
     networks:
       - monitoring
 {% endif %}
@@ -141,11 +126,18 @@ services:
         hard: 65536
 {% if horde_monitoring_mimir_enable_memcached | bool %}
     depends_on:
-{% if horde_monitoring_mimir_enable_s3 | bool and horde_monitoring_s3_manage_buckets | bool %}
+{% if horde_monitoring__embedded_s3 %}
+      s3-store:
+        condition: service_started
+{% elif horde_monitoring_mimir_enable_s3 | bool and horde_monitoring_s3_manage_buckets | bool %}
       s3-init:
         condition: service_completed_successfully
 {% endif %}
       memcached:
+        condition: service_started
+{% elif horde_monitoring__embedded_s3 %}
+    depends_on:
+      s3-store:
         condition: service_started
 {% elif horde_monitoring_mimir_enable_s3 | bool and horde_monitoring_s3_manage_buckets | bool %}
     depends_on:
@@ -244,7 +236,11 @@ services:
       timeout: 5s
       retries: 5
       start_period: 30s
-{% if horde_monitoring_mimir_enable_s3 | bool and horde_monitoring_s3_manage_buckets | bool %}
+{% if horde_monitoring__embedded_s3 %}
+    depends_on:
+      s3-store:
+        condition: service_started
+{% elif horde_monitoring_mimir_enable_s3 | bool and horde_monitoring_s3_manage_buckets | bool %}
     depends_on:
       s3-init:
         condition: service_completed_successfully
@@ -286,7 +282,11 @@ services:
       timeout: 5s
       retries: 5
       start_period: 30s
-{% if horde_monitoring_mimir_enable_s3 | bool and horde_monitoring_s3_manage_buckets | bool %}
+{% if horde_monitoring__embedded_s3 %}
+    depends_on:
+      s3-store:
+        condition: service_started
+{% elif horde_monitoring_mimir_enable_s3 | bool and horde_monitoring_s3_manage_buckets | bool %}
     depends_on:
       s3-init:
         condition: service_completed_successfully
@@ -328,7 +328,11 @@ services:
       timeout: 5s
       retries: 5
       start_period: 30s
-{% if horde_monitoring_mimir_enable_s3 | bool and horde_monitoring_s3_manage_buckets | bool %}
+{% if horde_monitoring__embedded_s3 %}
+    depends_on:
+      s3-store:
+        condition: service_started
+{% elif horde_monitoring_mimir_enable_s3 | bool and horde_monitoring_s3_manage_buckets | bool %}
     depends_on:
       s3-init:
         condition: service_completed_successfully

@@ -1,0 +1,28 @@
+# Garage configuration — embedded mode (monitoring stack)
+# Managed by Ansible — do not edit manually
+
+metadata_dir = "/var/lib/garage/meta"
+data_dir = "/var/lib/garage/data"
+db_engine = "lmdb"
+
+replication_factor = 1
+block_size = "1M"
+
+rpc_bind_addr = "[::]:3901"
+rpc_public_addr = "127.0.0.1:3901"
+rpc_secret = "{{ horde_monitoring_s3_rpc_secret }}"
+
+[s3_api]
+s3_region = "{{ horde_monitoring_s3_region }}"
+api_bind_addr = "[::]:3900"
+root_domain = ".s3.garage.localhost"
+
+[s3_web]
+bind_addr = "[::]:3902"
+root_domain = ".web.garage.localhost"
+index = "index.html"
+
+[admin]
+api_bind_addr = "[::]:3903"
+admin_token = "{{ horde_monitoring_s3_admin_token }}"
+metrics_token = "{{ horde_monitoring_s3_admin_token }}"

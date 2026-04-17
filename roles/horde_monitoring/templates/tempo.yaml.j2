@@ -38,6 +38,7 @@ storage:
       bucket: {{ horde_monitoring_tempo_traces_bucket }}
       insecure: {{ horde_monitoring_s3_insecure | bool | lower }}
       forcepathstyle: {{ horde_monitoring_s3_force_path_style | bool | lower }}
+      region: {{ horde_monitoring_s3_region }}
     wal:
       path: /var/tempo/wal
     local:

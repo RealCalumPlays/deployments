@@ -41,6 +41,7 @@ AI Horde APIs                 │                                               
 - All services bind to `127.0.0.1` — use HAProxy for external access
 - Mimir runs monolithic mode with multi-tenant retention
 - Prometheus splits `remote_write` by job into separate tenants
+- For production, prefer `horde_monitoring_s3_deployment_mode: external` with a managed S3-compatible backend; embedded Garage remains supported for local/single-host setups
 
 ## Quick Start
 
@@ -196,7 +197,9 @@ To add custom dashboards, place JSON files in `grafana_dashboard_dir`
 ```bash
 curl -sf http://127.0.0.1:9009/ready   && echo "Mimir OK"
 curl -sf http://127.0.0.1:3000/api/health && echo "Grafana OK"
-curl -sf http://127.0.0.1:9000/health             && echo "S3 backend OK"
+# Embedded Garage mode:
+curl -sf http://127.0.0.1:3903/health && echo "S3 backend OK"
+# External mode: use your provider-specific S3 health/availability checks.
 curl -sf http://localhost:9150/metrics | head -5 && echo "Exporter OK"
 systemctl status prometheus --no-pager
 ```

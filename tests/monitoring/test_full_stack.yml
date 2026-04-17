@@ -98,8 +98,7 @@
           - "'bucket_name: mimir-blocks' in (horde_monitoring_mimir_config.content | b64decode)"
           - "'common:' in (horde_monitoring_mimir_config.content | b64decode)"
           - "'s3-store' in (compose_config.content | b64decode)"
-          - "'s3-init' in (compose_config.content | b64decode)"
-          - "'/health' in (compose_config.content | b64decode)"
+          - "'s3-init' not in (compose_config.content | b64decode)"
 
     - name: Assert performance and caching config
       ansible.builtin.assert:
@@ -126,13 +125,75 @@
           - "'MimirRequestErrors' in (alerting_rules.content | b64decode)"
           - "'MimirIngestionStalled' in (alerting_rules.content | b64decode)"
           - "'MimirCompactorFailed' in (alerting_rules.content | b64decode)"
-          - "'S3StorageDown' in (alerting_rules.content | b64decode)"
+          # S3 health alerts — split into metrics-scrape (warning) and
+          # backend-failing (critical driven by thanos_objstore_* metrics).
+          # Plan 013 refactor: removes the legacy S3StorageDown false-positive.
+          - "'S3MetricsScrapeDown' in (alerting_rules.content | b64decode)"
+          - "'S3StorageBackendFailing' in (alerting_rules.content | b64decode)"
+          - "'S3StorageDown' not in (alerting_rules.content | b64decode)"
           - "'HostDiskUsageCritical' in (alerting_rules.content | b64decode)"
           - "'HostDiskUsageHigh' in (alerting_rules.content | b64decode)"
           - "'mimir-health' in (alerting_rules.content | b64decode)"
           - "'s3-storage-health' in (alerting_rules.content | b64decode)"
           - "'host-disk-usage' in (alerting_rules.content | b64decode)"
           - "'monitoring-stack-watchdog' in (alerting_rules.content | b64decode)"
+          # Application-level alerts (horde-app-health group)
+          - "'horde-app-health' in (alerting_rules.content | b64decode)"
+          - "'HordeExporterDown' in (alerting_rules.content | b64decode)"
+          - "'HordeAPIDown' in (alerting_rules.content | b64decode)"
+          - "'HordeExporterScrapeFailing' in (alerting_rules.content | b64decode)"
+          - "'HordeExporterRateLimitExhausted' in (alerting_rules.content | b64decode)"
+          - "'HordeNoActiveImageWorkers' in (alerting_rules.content | b64decode)"
+          - "'HordeNoActiveTextWorkers' in (alerting_rules.content | b64decode)"
+          - "'HordeImageWorkerCountDrop' in (alerting_rules.content | b64decode)"
+          - "'HordeImageQueueBacklog' in (alerting_rules.content | b64decode)"
+          - "'HordeMaintenanceMode' in (alerting_rules.content | b64decode)"
+          - "'HordeRaidMode' in (alerting_rules.content | b64decode)"
+          # Prometheus self-monitoring alerts (prometheus-health group)
+          - "'prometheus-health' in (alerting_rules.content | b64decode)"
+          - "'PrometheusTargetsMissing' in (alerting_rules.content | b64decode)"
+          - "'PrometheusRemoteWriteErrors' in (alerting_rules.content | b64decode)"
+          - "'PrometheusRuleEvaluationFailures' in (alerting_rules.content | b64decode)"
+          - "'PrometheusNotConnectedToAlertmanager' in (alerting_rules.content | b64decode)"
+          - "'PrometheusTSDBCompactionsFailing' in (alerting_rules.content | b64decode)"
+          - "'PrometheusConfigReloadFailure' in (alerting_rules.content | b64decode)"
+          - "'PrometheusNotificationsBacklog' in (alerting_rules.content | b64decode)"
+          - "'AlertmanagerNotificationFailing' in (alerting_rules.content | b64decode)"
+          # Host resource alerts (host-resource-health group)
+          - "'host-resource-health' in (alerting_rules.content | b64decode)"
+          - "'HostHighCpuLoad' in (alerting_rules.content | b64decode)"
+          - "'HostHighMemoryUsage' in (alerting_rules.content | b64decode)"
+          - "'HostOomKillDetected' in (alerting_rules.content | b64decode)"
+          - "'HostSystemdServiceFailed' in (alerting_rules.content | b64decode)"
+          - "'HostClockSkew' in (alerting_rules.content | b64decode)"
+          - "'HostSwapFillingUp' in (alerting_rules.content | b64decode)"
+          - "'HostCpuStealHigh' in (alerting_rules.content | b64decode)"
+          # Host disk projections (host-disk-projections group)
+          - "'host-disk-projections' in (alerting_rules.content | b64decode)"
+          - "'HostOutOfInodes' in (alerting_rules.content | b64decode)"
+          - "'HostDiskWillFillIn24h' in (alerting_rules.content | b64decode)"
+          # PostgreSQL alerts should NOT be present (disabled by default)
+          - "'PostgresExporterDown' not in (alerting_rules.content | b64decode)"
+          - "'PostgresDown' not in (alerting_rules.content | b64decode)"
+
+    - name: Read rendered recording rules
+      ansible.builtin.slurp:
+        path: /etc/prometheus/rules/monitoring-stack.recording.rules
+      register: recording_rules
+
+    - name: Assert recording rules content (Plan 013 Phase E)
+      ansible.builtin.assert:
+        that:
+          - "'horde-app:recording' in (recording_rules.content | b64decode)"
+          - "'mimir:recording' in (recording_rules.content | b64decode)"
+          - "'host:recording' in (recording_rules.content | b64decode)"
+          - "'horde:api_availability:avg5m' in (recording_rules.content | b64decode)"
+          - "'horde:workers_active:by_type' in (recording_rules.content | b64decode)"
+          - "'horde:queue_drain_seconds:avg5m' in (recording_rules.content | b64decode)"
+          - "'mimir:ingestion_rate:rate5m' in (recording_rules.content | b64decode)"
+          - "'mimir:request_errors:ratio5m' in (recording_rules.content | b64decode)"
+          - "'host:cpu_utilisation:avg5m' in (recording_rules.content | b64decode)"
+          - "'host:memory_utilisation:ratio' in (recording_rules.content | b64decode)"
 
     - name: Assert no floating or latest image tags in Compose
       ansible.builtin.assert:
@@ -141,7 +202,7 @@
           - "'grafana/grafana:12.4.1' in (compose_config.content | b64decode)"
           - "'memcached:1.6.41-alpine' in (compose_config.content | b64decode)"
           - "'grafana/mimir:2.15.0' in (compose_config.content | b64decode)"
-          - "'rustfs/rustfs:' in (compose_config.content | b64decode)"
+          - "'dxflrs/garage:' in (compose_config.content | b64decode)"
         fail_msg: "All container images must use immutable version tags (no 'latest', no minor-only floating)"
 
     - name: Assert log rotation is configured for all services
@@ -205,7 +266,7 @@
 
     - name: Stat S3 data directory
       ansible.builtin.stat:
-        path: /var/lib/s3-data
+        path: /var/lib/garage/data
       register: _s3_data_stat
 
     - name: Assert Mimir directories are owned by root:root
@@ -217,12 +278,12 @@
           - _mimir_data_stat.stat.gr_name == 'root'
         fail_msg: "Mimir directories must be owned by root:root"
 
-    - name: Assert S3 data directory is owned by UID 10001
+    - name: Assert S3 data directory is owned by root
       ansible.builtin.assert:
         that:
-          - _s3_data_stat.stat.uid == 10001
-          - _s3_data_stat.stat.gid == 10001
-        fail_msg: "S3 data directory must be owned by UID/GID 10001 (RustFS container user)"
+          - _s3_data_stat.stat.pw_name == 'root'
+          - _s3_data_stat.stat.gr_name == 'root'
+        fail_msg: "S3 data directory must be owned by root:root"
 
     # Run the role a second time with a changed value so Ansible
     # overwrites the config and creates a backup file.
@@ -451,8 +512,8 @@
           - "'loki:' in (compose_lt.content | b64decode)"
           - "'grafana/loki:3.4.2' in (compose_lt.content | b64decode)"
           - "'3100:3100' in (compose_lt.content | b64decode)"
-          - "'loki-chunks' in (compose_lt.content | b64decode)"
-        fail_msg: "Docker Compose must contain a Loki service with pinned image tag"
+          - "'loki.yaml:/etc/loki/loki.yaml:ro' in (compose_lt.content | b64decode)"
+        fail_msg: "Docker Compose must contain a Loki service with pinned image tag and config mount"
 
     - name: Assert monitoring services have horde.logs labels
       ansible.builtin.assert:
@@ -470,8 +531,8 @@
           - "'3200:3200' in (compose_lt.content | b64decode)"
           - "'4317:4317' in (compose_lt.content | b64decode)"
           - "'4318:4318' in (compose_lt.content | b64decode)"
-          - "'tempo-traces' in (compose_lt.content | b64decode)"
-        fail_msg: "Docker Compose must contain a Tempo service with pinned image tag"
+          - "'tempo.yaml:/etc/tempo/tempo.yaml:ro' in (compose_lt.content | b64decode)"
+        fail_msg: "Docker Compose must contain a Tempo service with pinned image tag and config mount"
 
     - name: Assert no :latest tags in Compose
       ansible.builtin.assert:
@@ -623,7 +684,7 @@
           - "'pyroscope:' in (compose_lt.content | b64decode)"
           - "'grafana/pyroscope:1.19.0' in (compose_lt.content | b64decode)"
           - "'4040:4040' in (compose_lt.content | b64decode)"
-          - "'pyroscope-data' in (compose_lt.content | b64decode)"
+          - "'pyroscope.yaml:/etc/pyroscope/pyroscope.yaml:ro' in (compose_lt.content | b64decode)"
           - "'runtime-overrides.yaml:/etc/pyroscope/runtime-overrides.yaml:ro' in (compose_lt.content | b64decode)"
         fail_msg: "Docker Compose must contain a Pyroscope service with pinned image tag and runtime overrides mount"
 
@@ -762,3 +823,52 @@
           - "'LokiDown' not in (alerting_disabled.content | b64decode)"
           - "'TempoDown' not in (alerting_disabled.content | b64decode)"
         fail_msg: "Loki/Tempo alerts should not be present when those components are disabled"
+
+    - name: Assert app and prometheus alerts are still present when Loki/Tempo disabled
+      ansible.builtin.assert:
+        that:
+          - "'HordeExporterDown' in (alerting_disabled.content | b64decode)"
+          - "'PrometheusTargetsMissing' in (alerting_disabled.content | b64decode)"
+          - "'HostHighCpuLoad' in (alerting_disabled.content | b64decode)"
+        fail_msg: "App, Prometheus, and host resource alerts must remain when Loki/Tempo are disabled"
+
+# ---------------------------------------------------------------------------
+# Play 5: Verify PostgreSQL alerts are included when enabled
+# ---------------------------------------------------------------------------
+- name: Test horde_monitoring - PostgreSQL alerts enabled
+  hosts: testhost
+  become: true
+  gather_facts: true
+
+  vars:
+    horde_monitoring_install_mimir: true
+    horde_monitoring_install_grafana: false
+    horde_monitoring_install_loki: false
+    horde_monitoring_install_tempo: false
+    horde_monitoring_configure_firewall: false
+    horde_monitoring_configure_haproxy: false
+    horde_monitoring_grafana_admin_password: "testpass123"
+    horde_monitoring_start_services: false
+    horde_monitoring_mimir_backup_enabled: false
+    horde_monitoring_install_postgres_alerts: true
+
+  roles:
+    - role: horde_monitoring
+
+  post_tasks:
+    - name: Read alerting rules (postgres enabled)
+      ansible.builtin.slurp:
+        path: /etc/prometheus/rules/monitoring-stack.rules
+      register: alerting_postgres
+
+    - name: Assert PostgreSQL alerting rules are present
+      ansible.builtin.assert:
+        that:
+          - "'postgres-health' in (alerting_postgres.content | b64decode)"
+          - "'PostgresExporterDown' in (alerting_postgres.content | b64decode)"
+          - "'PostgresDown' in (alerting_postgres.content | b64decode)"
+          - "'PostgresTooManyConnections' in (alerting_postgres.content | b64decode)"
+          - "'PostgresDeadlocks' in (alerting_postgres.content | b64decode)"
+          - "'PostgresSlowQueries' in (alerting_postgres.content | b64decode)"
+          - "'PostgresReplicationLag' in (alerting_postgres.content | b64decode)"
+        fail_msg: "Alerting rules must include PostgreSQL health alerts when postgres alerts are enabled"

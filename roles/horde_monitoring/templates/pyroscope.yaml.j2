@@ -43,6 +43,7 @@ storage:
     secret_access_key: {{ horde_monitoring_s3_secret_key }}
     bucket_name: {{ horde_monitoring_pyroscope_blocks_bucket }}
     insecure: {{ horde_monitoring_s3_insecure | bool | lower }}
+    region: {{ horde_monitoring_s3_region }}
 {% else %}
 storage:
   backend: filesystem

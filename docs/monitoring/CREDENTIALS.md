@@ -10,6 +10,10 @@ The monitoring stack uses three sets of credentials:
 | `horde_monitoring_grafana_admin_password` | `docker-compose.yml`                           | Grafana admin UI login |
 | `horde_monitoring_s3_access_key` | `mimir.yaml`, `docker-compose.yml`, `mimir-backup.service` | S3 storage admin access key (username) |
 
+For production, the preferred deployment model is `horde_monitoring_s3_deployment_mode: external`
+with a managed S3-compatible backend. Embedded Garage mode remains supported
+for local/single-host setups.
+
 ## File Permissions
 
 All files containing credentials are rendered with `mode: 0600` and
@@ -60,18 +64,28 @@ Changing credentials requires a full stack restart.
 
 The `horde_monitoring_s3_secret_key` appears in:
 
-1. The S3 server's `RUSTFS_SECRET_KEY` environment variable (Compose)
-2. Mimir's `common.storage.s3.secret_access_key` (mimir.yaml)
-3. The `s3-init` sidecar's `mc alias set` command (Compose)
-4. The backup service's `mc alias set` command (mimir-backup.service)
+1. Mimir's `common.storage.s3.secret_access_key` (mimir.yaml)
+2. Optional `s3-init` sidecar (`mc alias set`) when bucket management is enabled
+3. Backup service `mc alias set` command (mimir-backup.service)
+4. Embedded Garage keyring state (when `horde_monitoring_s3_deployment_mode: embedded`)
 
 **Procedure:**
 
 1. Update `horde_monitoring_s3_secret_key` in your vault/inventory
 2. Run the playbook — Ansible re-renders all affected templates
-3. The `restart monitoring stack` handler fires, pulling images and
-   restarting all containers with the new credential
-4. Verify S3 health: `curl http://127.0.0.1:9000/health`
+3. In embedded Garage mode, rotate to a new key ID + secret pair if needed
+  (for example, update both `horde_monitoring_s3_access_key` and
+  `horde_monitoring_s3_secret_key` together), then rerun the playbook
+4. The `restart monitoring stack` handler fires, pulling images and
+  restarting containers with the updated client credentials
+4. Verify S3 health:
+  - external mode: use your provider-specific health/availability checks
+  - embedded Garage mode:
+
+```bash
+curl http://127.0.0.1:3903/health
+```
+
 5. Verify Mimir health: `curl http://127.0.0.1:9009/ready`
 
 ### Grafana password rotation
@@ -106,5 +120,7 @@ output and `/proc/*/environ`. Grafana supports file-based credential loading:
 
 - **Grafana:** `GF_SECURITY_ADMIN_PASSWORD__FILE`
 
-RustFS does not currently support file-based secret loading; this remains
-an environment variable for now.
+Embedded Garage already uses file-backed server configuration (`/etc/garage.toml`),
+but S3 client credentials are still rendered into backend configs and backup
+runtime environments. Moving those client credentials to a secret-injection
+pattern remains a future hardening opportunity.
