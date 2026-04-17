@@ -145,7 +145,7 @@
     horde_monitoring_grafana_provision_dashboards: true
     # horde_monitoring_grafana_root_url: "https://grafana.example.com"
 
-    # -- Loki (log aggregation — opt-in) --
+    # -- Loki (log aggregation — enabled by default; set explicitly for clarity) --
     horde_monitoring_install_loki: true
     horde_monitoring_loki_retention_period: "2160h"  # 90 days
 
@@ -243,7 +243,7 @@
           X-Scope-OrgID: "{{ horde_monitoring_infrastructure_tenant_id }}"
         write_relabel_configs:
           - source_labels: [job]
-            regex: horde-exportepasslibr
+            regex: horde-exporter
             action: drop
       - url: "http://localhost:9009/api/v1/push"
         headers:
@@ -269,11 +269,34 @@
           - targets:
               - "localhost:9150"
       - job_name: s3
-        # metrics_path is backend-specific; omit to use the default /metrics endpoint.
-        # RustFS exposes basic Prometheus metrics at /metrics on port 9000.
+        # Garage metrics are exposed on the admin API port, not the S3 API port.
+        # Embedded mode defaults to localhost:3903 with bearer auth.
+        # In external mode, set horde_monitoring_external_s3_host,
+        # horde_monitoring_external_s3_metrics_port, and
+        # horde_monitoring_external_s3_metrics_token to match your backend.
+        # If you proxy metrics through HAProxy (as in ops/site_monitoring.yml),
+        # point this target at the proxy and switch to basic_auth.
+        metrics_path: /metrics
         static_configs:
           - targets:
-              - "localhost:9000"
+              - >-
+                {{
+                  (
+                    horde_monitoring_external_s3_host
+                    ~ ':'
+                    ~ ((horde_monitoring_external_s3_metrics_port | default(3903)) | string)
+                  )
+                  if horde_monitoring_s3_deployment_mode == 'external'
+                  else 'localhost:' ~ (horde_monitoring_s3_admin_port | string)
+                }}
+        authorization:
+          type: Bearer
+          credentials: >-
+            {{
+              horde_monitoring_external_s3_metrics_token
+              if horde_monitoring_s3_deployment_mode == 'external'
+              else horde_monitoring_s3_admin_token
+            }}
       - job_name: loki
         static_configs:
           - targets:
@@ -294,6 +317,14 @@
     #   static_configs:
     #     - targets:
     #         - "localhost:9187"
+
+    # -- Alerting rule toggles --
+    # Application alerts require the horde-exporter scrape target.
+    horde_monitoring_install_app_alerts: true
+    # Prometheus self-monitoring alerts.
+    horde_monitoring_install_prometheus_alerts: true
+    # PostgreSQL alerts — enable when postgres_exporter is deployed.
+    # horde_monitoring_install_postgres_alerts: true
 
     # -- Stats exporter --
     horde_stats_exporter_port: 9150

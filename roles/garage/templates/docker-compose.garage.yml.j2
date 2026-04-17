@@ -1,0 +1,29 @@
+# Docker Compose for standalone Garage S3-compatible object storage
+# Managed by Ansible — do not edit manually
+
+services:
+  garage:
+    image: {{ garage_image }}
+    container_name: garage
+    labels:
+      horde.logs: "true"
+      horde.app: "garage"
+      horde.component: "s3-store"
+    volumes:
+      - {{ garage_config_dir }}/garage.toml:/etc/garage.toml:ro
+      - {{ garage_metadata_dir }}:/var/lib/garage/meta
+      - {{ garage_data_dir }}:/var/lib/garage/data
+    ports:
+      - "{{ garage_bind_address }}:{{ garage_s3_api_port }}:3900"
+      - "{{ garage_admin_bind_address }}:{{ garage_admin_port }}:3903"
+      - "127.0.0.1:{{ garage_rpc_port }}:3901"
+    restart: unless-stopped
+    deploy:
+      resources:
+        limits:
+          memory: {{ garage_memory_limit }}
+    logging:
+      driver: local
+      options:
+        max-size: "25m"
+        max-file: "3"

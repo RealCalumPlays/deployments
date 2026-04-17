@@ -1,0 +1,84 @@
+---
+# Default variables for the garage role.
+#
+# Deploys a standalone Garage S3-compatible distributed object storage
+# container via Docker Compose, managed by a systemd unit.
+#
+# Garage: https://garagehq.deuxfleurs.fr/
+
+# Garage container image (pinned version)
+garage_image: "dxflrs/garage:v2.1.0"
+
+# S3 API port (host-side). Garage's native S3 API port.
+garage_s3_api_port: 3900
+# Admin API port (host-side). Used for health checks and cluster management.
+garage_admin_port: 3903
+# RPC port (inter-node communication). Bind to localhost for single-node.
+garage_rpc_port: 3901
+
+# Bind address for the S3 API published port.
+# Default: loopback only.
+# Set to 0.0.0.0 to expose to remote consumers (e.g. monitoring stack on another host).
+garage_bind_address: "0.0.0.0"
+# Bind address for the admin API published port.
+# Keep this on loopback unless a remote Prometheus needs Garage /metrics.
+# If you expose it, restrict network access (firewall/ACL) and use a strong
+# garage_admin_token (used as metrics token in garage.toml).
+garage_admin_bind_address: "127.0.0.1"
+# S3 region accepted by Garage for SigV4 request scope.
+# Must match the region configured in S3 clients.
+garage_s3_region: "garage"
+
+# Persistent data and metadata directories.
+# Place on a dedicated volume/partition in production for isolation.
+garage_data_dir: "/var/lib/garage/data"
+garage_metadata_dir: "/var/lib/garage/meta"
+
+# Configuration and compose directories
+garage_config_dir: "/etc/garage"
+garage_compose_dir: "/opt/garage"
+
+# Container resource limits
+garage_memory_limit: "512m"
+
+# S3 credentials used by S3 API clients.
+# garage_access_key is the key ID (format: GK + 24 hex chars), not the display name.
+# garage_access_key_name is a human-readable label used for key management commands.
+# garage_secret_key must be 64 hex chars (32 bytes).
+garage_access_key: "CHANGE_ME_GARAGE_ACCESS_KEY_ID"
+garage_access_key_name: "horde"
+garage_secret_key: "changeme-garage-secret"
+
+# Admin API token — used for cluster management (layout, keys, buckets).
+# Must be overridden in vault.
+garage_admin_token: "changeme-garage-admin-token"
+
+# RPC secret — 32-byte hex string for inter-node RPC authentication.
+# Must be overridden in vault.
+garage_rpc_secret: "changeme-garage-rpc-secret"
+
+# Garage storage engine and tuning
+garage_replication_factor: 1
+garage_db_engine: "lmdb"
+garage_block_size: "1M"
+# Node capacity for layout assignment. Accepts human-readable sizes.
+# Converted to bytes via Ansible's human_to_bytes filter during init.
+garage_capacity: "1 TB"
+
+# Health endpoint used for readiness checks after start
+garage_healthcheck_url: "http://127.0.0.1:{{ garage_admin_port }}/health"
+
+# Set to false in CI/test environments to skip Docker Compose startup
+# and health-check waits. Configs are still rendered and can be asserted on.
+garage_start_services: true
+
+# Bucket bootstrap — list of bucket names to create on first start.
+# The init sidecar creates buckets and grants the access key full permissions.
+garage_buckets: []
+# Example:
+#   garage_buckets:
+#     - mimir-blocks
+#     - mimir-ruler
+#     - loki-chunks
+#     - tempo-traces
+#     - pyroscope-data

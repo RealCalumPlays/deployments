@@ -57,6 +57,28 @@
     - horde_monitoring_mimir_enable_s3 | bool
     - horde_monitoring_s3_secret_key == "changeme-s3-secret"
 
+- name: Fail if embedded Garage access key ID format is invalid
+  ansible.builtin.fail:
+    msg: >-
+      horde_monitoring_s3_access_key must be a valid Garage key ID
+      (GK + 24 hex chars) when using embedded Garage mode.
+  when:
+    - horde_monitoring_start_services | bool
+    - horde_monitoring_mimir_enable_s3 | bool
+    - horde_monitoring_s3_deployment_mode == 'embedded'
+    - horde_monitoring_s3_access_key is not match('^GK[0-9a-fA-F]{24}$')
+
+- name: Fail if embedded Garage secret key format is invalid
+  ansible.builtin.fail:
+    msg: >-
+      horde_monitoring_s3_secret_key must be a valid Garage secret key
+      (64 hex chars / 32 bytes) when using embedded Garage mode.
+  when:
+    - horde_monitoring_start_services | bool
+    - horde_monitoring_mimir_enable_s3 | bool
+    - horde_monitoring_s3_deployment_mode == 'embedded'
+    - horde_monitoring_s3_secret_key is not match('^[0-9a-fA-F]{64}$')
+
 - name: Fail if default Grafana password is unchanged
   ansible.builtin.fail:
     msg: >-
@@ -67,14 +89,52 @@
     - horde_monitoring_install_grafana | bool
     - horde_monitoring_grafana_admin_password == "changeme"
 
-- name: Create S3 data directory
+- name: Create Garage config directory (embedded mode)
+  ansible.builtin.file:
+    path: "{{ horde_monitoring_s3_config_dir }}"
+    state: directory
+    owner: root
+    group: root
+    mode: "0755"
+  become: true
+  when:
+    - horde_monitoring_mimir_enable_s3 | bool
+    - horde_monitoring_s3_deployment_mode == 'embedded'
+
+- name: Create Garage data directory (embedded mode)
   ansible.builtin.file:
     path: "{{ horde_monitoring_s3_data_dir }}"
     state: directory
-    owner: "{{ horde_monitoring_s3_embedded_uid | string }}"
-    group: "{{ horde_monitoring_s3_embedded_gid | string }}"
+    owner: root
+    group: root
     mode: "0755"
   become: true
+  when:
+    - horde_monitoring_mimir_enable_s3 | bool
+    - horde_monitoring_s3_deployment_mode == 'embedded'
+
+- name: Create Garage metadata directory (embedded mode)
+  ansible.builtin.file:
+    path: "{{ horde_monitoring_s3_metadata_dir }}"
+    state: directory
+    owner: root
+    group: root
+    mode: "0755"
+  become: true
+  when:
+    - horde_monitoring_mimir_enable_s3 | bool
+    - horde_monitoring_s3_deployment_mode == 'embedded'
+
+- name: Template Garage configuration (embedded mode)
+  ansible.builtin.template:
+    src: garage-embedded.toml.j2
+    dest: "{{ horde_monitoring_s3_config_dir }}/garage.toml"
+    owner: root
+    group: root
+    mode: "0600"
+    backup: true
+  become: true
+  notify: Restart monitoring stack
   when:
     - horde_monitoring_mimir_enable_s3 | bool
     - horde_monitoring_s3_deployment_mode == 'embedded'

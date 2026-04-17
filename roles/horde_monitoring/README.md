@@ -16,10 +16,10 @@ Docker Compose, managed by a single systemd service.
 | Component          | Purpose                                                                   | Toggle                              |
 | ------------------ | ------------------------------------------------------------------------- | ----------------------------------- |
 | **Grafana Mimir**  | Long-term metric storage (multi-tenant, S3-backed)                        | `horde_monitoring_install_mimir`          |
-| **S3 storage**     | S3-compatible object storage backend (embedded RustFS or external service) | `horde_monitoring_mimir_enable_s3`                   |
+| **S3 storage**     | S3-compatible object storage backend (embedded Garage or external managed service) | `horde_monitoring_mimir_enable_s3`                   |
 | **Memcached**      | Query and metadata caching for Mimir                                      | `horde_monitoring_mimir_enable_memcached`            |
 | **Grafana**        | Visualization and dashboarding (pre-provisioned datasources + dashboards) | `horde_monitoring_install_grafana`        |
-| **Loki**           | Log aggregation (opt-in)                                                  | `horde_monitoring_install_loki`           |
+| **Loki**           | Log aggregation (enabled by default; set false to disable)                | `horde_monitoring_install_loki`           |
 | **Tempo**          | Distributed tracing (opt-in)                                              | `horde_monitoring_install_tempo`          |
 | **Pyroscope**      | Continuous profiling (opt-in)                                             | `horde_monitoring_install_pyroscope`      |
 | **Offsite backup** | Daily `mc mirror` of S3 data to a remote S3 target                        | `horde_monitoring_mimir_backup_enabled`              |
@@ -34,7 +34,7 @@ Docker Compose, managed by a single systemd service.
 ```
 Prometheus (native) ──remote_write──► Mimir (Docker)
                       │
-                 S3 backend (embedded or external)
+    S3 backend (external managed preferred; embedded supported)
                       │
                     Grafana (Docker) ──query──► Mimir
 ```
@@ -101,29 +101,32 @@ stats exporter.
 
 This role supports two explicit modes:
 
-- `embedded` (default): deploys local RustFS in the compose stack
-- `external`: does not deploy RustFS; points Mimir/Loki/Tempo/Pyroscope at an existing S3 backend
+- `external` (recommended for production): does not deploy storage; points Mimir/Loki/Tempo/Pyroscope at an existing S3 backend
+- `embedded` (supported for local/single-host deployments): deploys a local Garage container in the compose stack
 
-Default image in embedded mode is **RustFS** (`rustfs/rustfs`) — Apache 2.0, drop-in S3-compatible storage.
+Default image in embedded mode is **Garage** (`dxflrs/garage:v2.1.0`).
 
-> **Note:** RustFS is currently alpha software; suitable for local/test deployments.
+> **Note:** `horde_monitoring_s3_deployment_mode` defaults to `embedded` for local-first behavior. For production deployments, set it to `external` and point at a managed S3-compatible backend.
 
 | Variable                          | Default                        | Description |
 | --------------------------------- | ------------------------------ | ----------- |
 | `horde_monitoring_mimir_enable_s3` | `true`                         | Use S3 backend for object storage |
-| `horde_monitoring_s3_deployment_mode` | `embedded`                  | `embedded` (deploy RustFS) or `external` |
-| `horde_monitoring_s3_endpoint`    | `s3-store:9000`               | S3 endpoint (host:port) used in backend configs |
-| `horde_monitoring_s3_internal_url` | `http://s3-store:9000`       | URL used by compose-network init/bucket jobs |
-| `horde_monitoring_s3_api_url`     | `http://127.0.0.1:9000`       | URL used by host/systemd backup jobs and health checks |
+| `horde_monitoring_s3_deployment_mode` | `embedded`                  | `external` (recommended) or `embedded` (local Garage) |
+| `horde_monitoring_s3_endpoint`    | `s3-store:3900`               | S3 endpoint (host:port) used in backend configs |
+| `horde_monitoring_s3_internal_url` | `http://s3-store:3900`       | URL used by compose-network init/bucket jobs |
+| `horde_monitoring_s3_api_url`     | `http://127.0.0.1:{{ horde_monitoring_s3_api_port }}` | URL used by host/systemd backup jobs and health checks |
+| `horde_monitoring_s3_healthcheck_url` | `http://127.0.0.1:{{ horde_monitoring_s3_admin_port }}/health` | Embedded Garage health endpoint |
 | `horde_monitoring_s3_wait_for_ready` | `true` in embedded mode, `false` in external mode | Wait for `horde_monitoring_s3_healthcheck_url` before Mimir readiness checks |
 | `horde_monitoring_s3_insecure`    | `true`                        | S3 client insecure mode (set `false` for TLS backends) |
 | `horde_monitoring_s3_force_path_style` | `true`                   | Force path-style S3 requests for compatible backends |
+| `horde_monitoring_s3_region`      | `garage`                      | S3 region used by clients and embedded Garage |
 | `horde_monitoring_s3_manage_buckets` | `true` in embedded mode, `false` in external mode | Run `s3-init` bucket bootstrap job |
-| `horde_monitoring_s3_image`       | `rustfs/rustfs:1.0.0-alpha.93` | Embedded-mode storage image (pinned) |
-| `horde_monitoring_s3_access_key`  | `mimir`                       | S3 access key |
+| `horde_monitoring_s3_image`       | `dxflrs/garage:v2.1.0`        | Embedded-mode storage image (pinned) |
+| `horde_monitoring_s3_access_key`  | `CHANGE_ME_GARAGE_ACCESS_KEY_ID` | S3 access key ID (embedded Garage expects `GK` + 24 hex chars) |
+| `horde_monitoring_s3_access_key_name` | `mimir`                    | Human-readable embedded Garage key name used in bucket grants |
 | `horde_monitoring_s3_secret_key`  | `changeme-s3-secret`          | S3 secret key (**must override**) |
-| `horde_monitoring_s3_data_dir`    | `/var/lib/s3-data`            | Embedded-mode data directory (UID 10001) |
-| `horde_monitoring_s3_memory_limit` | `512m`                       | Embedded RustFS container memory limit |
+| `horde_monitoring_s3_data_dir`    | `/var/lib/garage/data`        | Embedded-mode data directory |
+| `horde_monitoring_s3_memory_limit` | `512m`                       | Embedded Garage container memory limit |
 
 Example external backend profile (Garage):
 
@@ -136,12 +139,13 @@ horde_monitoring_s3_wait_for_ready: false
 horde_monitoring_s3_insecure: true
 horde_monitoring_s3_force_path_style: true
 horde_monitoring_s3_manage_buckets: true
-horde_monitoring_s3_access_key: "<garage-access-key>"
-horde_monitoring_s3_secret_key: "<garage-secret-key>"
+horde_monitoring_s3_region: "garage"
+horde_monitoring_s3_access_key: "<provider-access-key-id>"
+horde_monitoring_s3_secret_key: "<provider-secret-key>"
 ```
 
-This role's external mode is intended to make replacing embedded RustFS a
-variable-only change.
+This role's external mode is intended to make switching between embedded
+Garage and managed external S3 a variable-only change.
 
 ### Multi-Tenant Retention
 
@@ -173,7 +177,7 @@ Backup behavior is mode-aware:
 - **Embedded S3 mode:** backup is enabled by default and requires a configured remote target when services start.
 - **External S3 mode:** backup unit management is opt-in via `horde_monitoring_mimir_backup_external_mode_enabled`.
 
-See [docs/BACKUP.md](../../docs/BACKUP.md) for RPO/RTO details and restore procedures.
+See [docs/monitoring/BACKUP.md](../../docs/monitoring/BACKUP.md) for RPO/RTO details and restore procedures.
 
 | Variable                         | Default          | Description                         |
 | -------------------------------- | ---------------- | ----------------------------------- |
@@ -197,11 +201,29 @@ metrics are present in Prometheus by setting:
 If services are started and this flag is false, the role fails fast to avoid silently
 deploying broken disk-capacity alerts.
 
-### Loki (Opt-in)
+### Alerting Rule Toggles And Job Names
+
+By default, the role renders stack self-monitoring rules plus application and
+Prometheus health rules. PostgreSQL alerts are opt-in.
+
+| Variable | Default | Description |
+| -------- | ------- | ----------- |
+| `horde_monitoring_install_alerting_rules` | `true` | Render monitoring stack alerting rules |
+| `horde_monitoring_install_app_alerts` | `true` | Enable AI Horde application health alerts from `horde-exporter` metrics |
+| `horde_monitoring_install_prometheus_alerts` | `true` | Enable Prometheus self-monitoring alerts |
+| `horde_monitoring_install_postgres_alerts` | `false` | Enable PostgreSQL alerts when `postgres_exporter` is deployed and scraped |
+| `horde_monitoring_horde_exporter_job_name` | `horde-exporter` | Prometheus job name used by application health alerts |
+| `horde_monitoring_prometheus_job_name` | `prometheus` | Prometheus self-scrape job name used by self-monitoring alerts |
+| `horde_monitoring_postgres_job_name` | `postgres` | Prometheus job name used by PostgreSQL alerts |
+
+Job-name variables must match `job_name` values in your Prometheus
+`scrape_configs`.
+
+### Loki (Enabled By Default)
 
 | Variable                  | Default              | Description             |
 | ------------------------- | -------------------- | ----------------------- |
-| `horde_monitoring_install_loki` | `false`              | Enable Loki             |
+| `horde_monitoring_install_loki` | `true`               | Enable or disable Loki  |
 | `horde_monitoring_loki_image`              | `grafana/loki:3.4.2` | Loki image (pinned)     |
 | `horde_monitoring_loki_port`               | `3100`               | HTTP API port           |
 | `horde_monitoring_loki_retention_period`   | `2160h`              | Log retention (90 days) |
@@ -251,13 +273,13 @@ ansible-vault create group_vars/mimir/vault.yml
 # Add: vault_s3_secret_key, vault_grafana_admin_password
 ```
 
-See [docs/CREDENTIALS.md](../../docs/CREDENTIALS.md) for rotation procedures.
+See [docs/monitoring/CREDENTIALS.md](../../docs/monitoring/CREDENTIALS.md) for rotation procedures.
 
 ## Verification
 
 ```bash
-# S3 storage backend (embedded RustFS default)
-curl -sf http://127.0.0.1:9000/health && echo OK
+# S3 storage backend (embedded Garage admin API default)
+curl -sf http://127.0.0.1:3903/health && echo OK
 
 # Mimir
 curl -sf http://127.0.0.1:9009/ready && echo OK
@@ -301,11 +323,11 @@ ansible-playbook -i inventory.yml site.yml --check --diff
 ## Related Documentation
 
 - [Monitoring Deployment Guide](../../MONITORING.md) — Architecture overview and quick start
-- [Observability Stack](../../docs/OBSERVABILITY.md) — Loki, Tempo, and Alloy deep-dive
-- [Backup & Restore](../../docs/BACKUP.md) — RPO/RTO, restore procedures
-- [Credentials](../../docs/CREDENTIALS.md) — Credential management and rotation
-- [Upgrading](../../docs/UPGRADING.md) — Component version upgrades
-- [Migration](../../docs/MIGRATION.md) — Host migration runbook
+- [Observability Stack](../../docs/monitoring/OBSERVABILITY.md) — Loki, Tempo, and Alloy deep-dive
+- [Backup & Restore](../../docs/monitoring/BACKUP.md) — RPO/RTO, restore procedures
+- [Credentials](../../docs/monitoring/CREDENTIALS.md) — Credential management and rotation
+- [Upgrading](../../docs/monitoring/UPGRADING.md) — Component version upgrades
+- [Migration](../../docs/monitoring/MIGRATION.md) — Host migration runbook
 
 ## License
 

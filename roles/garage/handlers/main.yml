@@ -1,0 +1,17 @@
+---
+# Handlers for the garage role
+
+- name: Reload systemd (garage)
+  ansible.builtin.systemd:
+    daemon_reload: true
+  become: true
+  when: garage_start_services | bool
+
+- name: Restart garage
+  ansible.builtin.shell: >
+    docker compose up -d --force-recreate
+  args:
+    chdir: "{{ garage_compose_dir }}"
+  become: true
+  changed_when: true
+  when: garage_start_services | bool

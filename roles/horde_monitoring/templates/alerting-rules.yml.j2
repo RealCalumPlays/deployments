@@ -4,6 +4,13 @@
 # These rules monitor the health of:
 #   - Mimir (metrics storage)
 #   - S3-compatible object storage backend
+#   - Loki (log aggregation, optional)
+#   - Tempo (distributed tracing, optional)
+#   - Pyroscope (continuous profiling, optional)
+#   - AI Horde API (application-level, optional)
+#   - PostgreSQL (via postgres_exporter, optional)
+#   - Prometheus (self-monitoring, optional)
+#   - Host filesystem (disk usage, optional)
 #   - The alerting pipeline itself (Watchdog dead man's switch)
 #
 # Placed in Prometheus rules directory (default: /etc/prometheus/rules/)
@@ -113,25 +120,59 @@ groups:
 
 {% if horde_monitoring_mimir_enable_s3 | bool %}
   # --- S3 storage health ---
-  # Monitors whether the S3-compatible storage backend is reachable.
+  # Two complementary signals:
+  #   1. S3MetricsScrapeDown (warning) — the /metrics endpoint of the S3
+  #      backend is unreachable. In external deployments this typically points
+  #      at an HAProxy basic-auth frontend; a reload or password drift can flip
+  #      this without the S3 data plane actually being impaired. Warning, not
+  #      critical, and a long `for:` window to dampen transient blips.
+  #   2. S3StorageBackendFailing (critical) — Mimir observes a high failure
+  #      rate on its own S3 bucket operations (thanos_objstore_* metrics).
+  #      This reflects an actual storage outage from the data-plane's
+  #      perspective and does not depend on the metrics proxy at all.
+  #
   # Disk capacity alerts are covered generically by the host-disk-usage group below.
-  # See the example playbook for the scrape config:
+  # See the example playbook for the metrics scrape config:
   #   job_name: {{ horde_monitoring_s3_job_name }}
   #   static_configs: [{targets: ["<s3-metrics-target>"]}]
   - name: s3-storage-health
     rules:
-      - alert: S3StorageDown
+      - alert: S3MetricsScrapeDown
         expr: up{job="{{ horde_monitoring_s3_job_name }}"} == 0
-        for: 2m
+        for: 10m
+        labels:
+          severity: warning
+        annotations:
+          summary: "S3 backend metrics endpoint is unreachable"
+          description: >-
+            Prometheus has been unable to scrape the S3-compatible backend's
+            /metrics endpoint (job={{ horde_monitoring_s3_job_name }}) for more than 10
+            minutes. This indicates a monitoring-layer issue (HAProxy metrics
+            proxy, basic-auth credentials, firewall), not necessarily an S3
+            data-plane outage. Check the metrics proxy on the storage host
+            and Prometheus scrape error details at /targets. For actual
+            storage-backend health, see S3StorageBackendFailing.
+
+      - alert: S3StorageBackendFailing
+        expr: >-
+          (
+            sum(rate(thanos_objstore_bucket_operation_failures_total{job="{{ horde_monitoring_mimir_job_name }}"}[5m]))
+          /
+            clamp_min(sum(rate(thanos_objstore_bucket_operations_total{job="{{ horde_monitoring_mimir_job_name }}"}[5m])), 1)
+          ) > 0.1
+        for: 10m
         labels:
           severity: critical
         annotations:
-          summary: "S3 storage backend is unreachable"
+          summary: "Mimir is seeing a high S3 operation failure rate"
           description: >-
-            The S3-compatible storage backend (job={{ horde_monitoring_s3_job_name }}) has been
-            unreachable for more than 2 minutes. Mimir cannot store or retrieve metric
-            blocks without S3 storage. Check the scrape target reachability and the
-            storage backend service logs for the configured endpoint.
+            More than 10% of Mimir's S3 bucket operations have failed over the
+            past 5 minutes (sustained for 10 minutes). Mimir cannot reliably
+            store or retrieve metric blocks. Inspect the storage backend
+            directly (not its metrics proxy): storage service logs, disk
+            capacity, and network reachability between Mimir and the S3
+            endpoint. This signal is independent of the S3 metrics scrape
+            target and is the authoritative indicator of storage health.
 {% endif %}
 
 {% if horde_monitoring_install_loki | bool %}
@@ -336,4 +377,509 @@ groups:
             Filesystem mounted at {{ '{{' }} $labels.mountpoint {{ '}}' }} has less than
             15% free space. If this hosts monitoring data (S3 store, Mimir),
             plan for expansion or review retention settings.
+{% endif %}
+
+{% if horde_monitoring_install_app_alerts | default(true) | bool %}
+  # --- AI Horde application health ---
+  # Monitors the AI Horde API via metrics from the horde-stats-exporter.
+  # Requires a Prometheus scrape config for:
+  #   job="{{ horde_monitoring_horde_exporter_job_name }}" → localhost:<exporter_port>/metrics
+  - name: horde-app-health
+    rules:
+      - alert: HordeExporterDown
+        expr: up{job="{{ horde_monitoring_horde_exporter_job_name }}"} == 0
+        for: 5m
+        labels:
+          severity: critical
+        annotations:
+          summary: "AI Horde stats exporter is unreachable"
+          description: >-
+            The horde-exporter (job={{ horde_monitoring_horde_exporter_job_name }}) has been
+            unreachable for more than 5 minutes. Application metrics are not
+            being collected. Check: systemctl status horde-exporter
+
+      - alert: HordeAPIDown
+        expr: horde_api_up == 0
+        for: 2m
+        labels:
+          severity: critical
+        annotations:
+          summary: "AI Horde API heartbeat is failing"
+          description: >-
+            The horde-exporter reports the AI Horde API as unreachable
+            (horde_api_up == 0) for more than 2 minutes. Workers cannot
+            poll for jobs and users cannot submit requests. Check the API
+            service directly (curl https://aihorde.net/api/v2/status/heartbeat)
+            and the API host/load balancer.
+
+      - alert: HordeExporterScrapeFailing
+        expr: horde_exporter_scrape_success == 0
+        for: 10m
+        labels:
+          severity: warning
+        annotations:
+          summary: "AI Horde exporter scrape failing on {{ '{{' }} $labels.endpoint {{ '}}' }}"
+          description: >-
+            The horde-exporter's scrape of the upstream API endpoint
+            {{ '{{' }} $labels.endpoint {{ '}}' }} has been failing for more than
+            10 minutes. Application metrics for this endpoint are stale.
+            This can indicate upstream API latency, auth failures, or
+            transient network issues. Check exporter logs.
+
+      - alert: HordeExporterRateLimitExhausted
+        expr: horde_exporter_ratelimit_remaining < 5
+        for: 10m
+        labels:
+          severity: warning
+        annotations:
+          summary: "AI Horde exporter is near the API rate limit"
+          description: >-
+            The horde-exporter has fewer than 5 API requests remaining in the
+            current rate-limit window for 10 minutes. Some scrapes are being
+            skipped or delayed, producing gappy metrics. Consider raising the
+            exporter's rate-limit budget or reducing scrape frequency.
+
+      - alert: HordeNoActiveImageWorkers
+        expr: >-
+          horde_performance_worker_count{type="image"} == 0
+        for: 10m
+        labels:
+          severity: critical
+        annotations:
+          summary: "No active image generation workers"
+          description: >-
+            The AI Horde has had zero active image workers for 10 minutes.
+            Image generation requests cannot be fulfilled. Check worker
+            status at the /api/v2/workers endpoint.
+
+      - alert: HordeNoActiveTextWorkers
+        expr: >-
+          horde_performance_worker_count{type="text"} == 0
+        for: 10m
+        labels:
+          severity: warning
+        annotations:
+          summary: "No active text generation workers"
+          description: >-
+            The AI Horde has had zero active text workers for 10 minutes.
+            Text generation requests cannot be fulfilled.
+
+      - alert: HordeImageWorkerCountDrop
+        expr: >-
+          (
+            horde_performance_worker_count{type="image"}
+          /
+            clamp_min(horde_performance_worker_count{type="image"} offset 30m, 1)
+          ) < 0.5
+            and
+          horde_performance_worker_count{type="image"} offset 30m > 5
+        for: 15m
+        labels:
+          severity: warning
+        annotations:
+          summary: "Image worker count dropped by >50%"
+          description: >-
+            The number of active image workers has dropped by more than 50%
+            compared to 30 minutes ago (current: {{ '{{' }} $value | humanize {{ '}}' }}).
+            This may indicate a network issue, API problem, or coordinated
+            worker shutdown.
+
+      - alert: HordeImageQueueBacklog
+        expr: >-
+          horde_performance_estimated_queue_drain_seconds{type="image"} > 1800
+        for: 15m
+        labels:
+          severity: warning
+        annotations:
+          summary: "Image queue drain time exceeds 30 minutes"
+          description: >-
+            The estimated time to drain the image generation queue has exceeded
+            30 minutes for the past 15 minutes (current estimate:
+            {{ '{{' }} $value | humanize {{ '}}' }}s). This indicates insufficient worker
+            capacity relative to demand.
+
+      - alert: HordeMaintenanceMode
+        expr: horde_mode_maintenance == 1
+        for: 1m
+        labels:
+          severity: info
+        annotations:
+          summary: "AI Horde is in maintenance mode"
+          description: >-
+            The AI Horde API has entered maintenance mode. New requests may be
+            rejected or throttled. This is informational — maintenance mode is
+            typically operator-initiated.
+
+      - alert: HordeRaidMode
+        expr: horde_mode_raid == 1
+        for: 1m
+        labels:
+          severity: warning
+        annotations:
+          summary: "AI Horde is in raid mode"
+          description: >-
+            The AI Horde API has entered raid mode, indicating a potential abuse
+            event. Anonymous and untrusted user access is restricted.
+{% endif %}
+
+{% if horde_monitoring_install_prometheus_alerts | default(true) | bool %}
+  # --- Prometheus self-monitoring ---
+  # Monitors the Prometheus instance that evaluates these rules.
+  # Requires a Prometheus scrape config for:
+  #   job="{{ horde_monitoring_prometheus_job_name }}" → localhost:9090/metrics
+  - name: prometheus-health
+    rules:
+      - alert: PrometheusTargetsMissing
+        expr: up == 0
+        for: 5m
+        labels:
+          severity: warning
+        annotations:
+          summary: "Prometheus target {{ '{{' }} $labels.job {{ '}}' }} is down"
+          description: >-
+            Prometheus cannot scrape {{ '{{' }} $labels.job {{ '}}' }}
+            (instance={{ '{{' }} $labels.instance {{ '}}' }}). The target has been
+            unreachable for more than 5 minutes.
+
+      - alert: PrometheusRemoteWriteErrors
+        expr: >-
+          100 * (
+            rate(prometheus_remote_storage_failed_samples_total{job="{{ horde_monitoring_prometheus_job_name }}"}[5m])
+          /
+            clamp_min(rate(prometheus_remote_storage_samples_total{job="{{ horde_monitoring_prometheus_job_name }}"}[5m]), 1)
+          ) > 1
+        for: 15m
+        labels:
+          severity: critical
+        annotations:
+          summary: "Prometheus remote write to Mimir is failing"
+          description: >-
+            More than 1% of samples sent via remote_write are failing.
+            Metrics are being lost. Check Prometheus logs and verify
+            Mimir is accepting writes at the configured endpoint.
+
+      - alert: PrometheusRuleEvaluationFailures
+        expr: >-
+          increase(prometheus_rule_evaluation_failures_total{job="{{ horde_monitoring_prometheus_job_name }}"}[5m]) > 0
+        for: 15m
+        labels:
+          severity: warning
+        annotations:
+          summary: "Prometheus rule evaluation failures"
+          description: >-
+            Prometheus has encountered rule evaluation failures in the past
+            5 minutes. Some alerts or recording rules may not be functioning
+            correctly. Check Prometheus logs for syntax or query errors.
+
+      - alert: PrometheusNotConnectedToAlertmanager
+        expr: >-
+          prometheus_notifications_alertmanagers_discovered{job="{{ horde_monitoring_prometheus_job_name }}"} < 1
+        for: 5m
+        labels:
+          severity: critical
+        annotations:
+          summary: "Prometheus has no connected Alertmanagers"
+          description: >-
+            Prometheus cannot reach any Alertmanager instance. Alerts
+            will not be delivered. Verify that Alertmanager is running
+            and that the alerting configuration in prometheus.yml is correct.
+
+      - alert: PrometheusTSDBCompactionsFailing
+        expr: >-
+          increase(prometheus_tsdb_compactions_failed_total{job="{{ horde_monitoring_prometheus_job_name }}"}[3h]) > 0
+        for: 5m
+        labels:
+          severity: warning
+        annotations:
+          summary: "Prometheus TSDB compactions are failing"
+          description: >-
+            Prometheus TSDB has had compaction failures in the past 3 hours.
+            This may indicate disk issues or data corruption. Check disk space
+            and Prometheus logs.
+
+      - alert: PrometheusConfigReloadFailure
+        expr: >-
+          prometheus_config_last_reload_successful{job="{{ horde_monitoring_prometheus_job_name }}"} == 0
+        for: 10m
+        labels:
+          severity: critical
+        annotations:
+          summary: "Prometheus failed to reload its configuration"
+          description: >-
+            The most recent attempt to reload Prometheus' configuration
+            failed. Alerting and recording rules may be running with a stale
+            or invalid configuration. Check: journalctl -u prometheus -n 200
+            and run: promtool check config /etc/prometheus/prometheus.yml
+
+      - alert: PrometheusNotificationsBacklog
+        expr: >-
+          (
+            prometheus_notifications_queue_length{job="{{ horde_monitoring_prometheus_job_name }}"}
+          /
+            clamp_min(prometheus_notifications_queue_capacity{job="{{ horde_monitoring_prometheus_job_name }}"}, 1)
+          ) > 0.8
+        for: 15m
+        labels:
+          severity: warning
+        annotations:
+          summary: "Prometheus notification queue is backing up"
+          description: >-
+            The notifications queue to Alertmanager is more than 80% full for
+            15 minutes. Alerts may be dropped if the queue saturates. Check
+            Alertmanager reachability and receiver latency.
+
+      - alert: AlertmanagerNotificationFailing
+        expr: >-
+          sum(rate(alertmanager_notifications_failed_total[5m])) > 0
+        for: 15m
+        labels:
+          severity: warning
+        annotations:
+          summary: "Alertmanager is failing to deliver notifications"
+          description: >-
+            Alertmanager has been failing to deliver notifications for more
+            than 15 minutes. Alerts are being generated but not reaching
+            receivers. Check Alertmanager logs and receiver configuration
+            (webhook URLs, SMTP credentials, etc.). Requires an 'alertmanager'
+            scrape job — this alert silently stays inactive if that metric is
+            not ingested.
+{% endif %}
+
+{% if horde_monitoring_install_postgres_alerts | default(false) | bool %}
+  # --- PostgreSQL health (via postgres_exporter) ---
+  # Monitors the PostgreSQL database that backs the AI Horde API.
+  # Requires a Prometheus scrape config for:
+  #   job="{{ horde_monitoring_postgres_job_name }}" → <host>:9187/metrics
+  - name: postgres-health
+    rules:
+      - alert: PostgresExporterDown
+        expr: up{job="{{ horde_monitoring_postgres_job_name }}"} == 0
+        for: 2m
+        labels:
+          severity: critical
+        annotations:
+          summary: "postgres_exporter is unreachable"
+          description: >-
+            The postgres_exporter (job={{ horde_monitoring_postgres_job_name }}) has been
+            unreachable for more than 2 minutes. PostgreSQL metrics are not
+            being collected.
+
+      - alert: PostgresDown
+        expr: pg_up{job="{{ horde_monitoring_postgres_job_name }}"} == 0
+        for: 1m
+        labels:
+          severity: critical
+        annotations:
+          summary: "PostgreSQL is down"
+          description: >-
+            postgres_exporter reports that PostgreSQL is not accepting
+            connections. The AI Horde API is likely failing all database
+            operations. Immediate investigation required.
+
+      - alert: PostgresTooManyConnections
+        expr: >-
+          sum by (instance) (pg_stat_activity_count{job="{{ horde_monitoring_postgres_job_name }}"})
+          >
+          (sum by (instance) (pg_settings_max_connections{job="{{ horde_monitoring_postgres_job_name }}"}) * 0.8)
+        for: 5m
+        labels:
+          severity: warning
+        annotations:
+          summary: "PostgreSQL connections exceed 80% of max_connections"
+          description: >-
+            PostgreSQL is using more than 80% of its configured max_connections.
+            New connections may soon be refused. Consider increasing max_connections
+            or investigating connection leaks (current: {{ '{{' }} $value | humanize {{ '}}' }}).
+
+      - alert: PostgresDeadlocks
+        expr: >-
+          increase(pg_stat_database_deadlocks_total{job="{{ horde_monitoring_postgres_job_name }}"}[5m]) > 5
+        for: 5m
+        labels:
+          severity: warning
+        annotations:
+          summary: "PostgreSQL deadlocks detected"
+          description: >-
+            More than 5 deadlocks detected in the past 5 minutes on database
+            {{ '{{' }} $labels.datname {{ '}}' }}. This indicates contention between
+            concurrent transactions. Review application query patterns.
+
+      - alert: PostgresSlowQueries
+        expr: >-
+          pg_slow_queries{job="{{ horde_monitoring_postgres_job_name }}"} > 0
+            or
+          pg_stat_activity_max_tx_duration{job="{{ horde_monitoring_postgres_job_name }}"} > 300
+        for: 5m
+        labels:
+          severity: warning
+        annotations:
+          summary: "Long-running PostgreSQL queries detected"
+          description: >-
+            PostgreSQL has queries running for more than 5 minutes.
+            Long-running transactions can cause table bloat and lock
+            contention. Investigate with pg_stat_activity.
+
+      - alert: PostgresReplicationLag
+        expr: >-
+          pg_replication_lag{job="{{ horde_monitoring_postgres_job_name }}"} > 30
+        for: 5m
+        labels:
+          severity: warning
+        annotations:
+          summary: "PostgreSQL replication lag exceeds 30 seconds"
+          description: >-
+            The replication lag on {{ '{{' }} $labels.instance {{ '}}' }} has exceeded
+            30 seconds for 5 minutes. Replica data may be stale.
+{% endif %}
+
+{% if horde_monitoring_install_host_disk_alerts | default(true) | bool %}
+  # --- Host resource usage ---
+  # Extended host health checks beyond disk usage. Requires node_exporter
+  # or Alloy prometheus.exporter.unix metrics.
+  - name: host-resource-health
+    rules:
+      - alert: HostHighCpuLoad
+        expr: >-
+          100 - (avg by (instance) (rate(node_cpu_seconds_total{mode="idle"}[5m])) * 100) > 90
+        for: 15m
+        labels:
+          severity: warning
+        annotations:
+          summary: "Host CPU usage exceeds 90% on {{ '{{' }} $labels.instance {{ '}}' }}"
+          description: >-
+            Average CPU utilization has exceeded 90% for the past 15 minutes.
+            This may impact service performance. Check running processes
+            with: top -bn1 | head -20
+
+      - alert: HostHighMemoryUsage
+        expr: >-
+          (
+            node_memory_MemTotal_bytes - node_memory_MemAvailable_bytes
+          ) / node_memory_MemTotal_bytes > 0.90
+        for: 15m
+        labels:
+          severity: warning
+        annotations:
+          summary: "Host memory usage exceeds 90% on {{ '{{' }} $labels.instance {{ '}}' }}"
+          description: >-
+            Memory utilization has exceeded 90% for the past 15 minutes.
+            OOM kills may occur. Check memory consumers with: free -h && ps aux --sort=-%mem | head
+
+      - alert: HostOomKillDetected
+        expr: >-
+          increase(node_vmstat_oom_kill[5m]) > 0
+        for: 0m
+        labels:
+          severity: critical
+        annotations:
+          summary: "OOM kill detected on {{ '{{' }} $labels.instance {{ '}}' }}"
+          description: >-
+            An OOM kill has occurred in the past 5 minutes. A process was
+            terminated due to memory pressure. Check dmesg and journal
+            for the killed process: dmesg | grep -i oom
+
+      - alert: HostSystemdServiceFailed
+        expr: >-
+          node_systemd_unit_state{state="failed"} == 1
+        for: 5m
+        labels:
+          severity: warning
+        annotations:
+          summary: "Systemd unit {{ '{{' }} $labels.name {{ '}}' }} has failed on {{ '{{' }} $labels.instance {{ '}}' }}"
+          description: >-
+            Systemd unit {{ '{{' }} $labels.name {{ '}}' }} is in failed state.
+            Check: systemctl status {{ '{{' }} $labels.name {{ '}}' }} && journalctl -u {{ '{{' }} $labels.name {{ '}}' }} --since '10 minutes ago'
+
+      - alert: HostClockSkew
+        expr: >-
+          abs(node_timex_offset_seconds) > 0.05
+        for: 10m
+        labels:
+          severity: warning
+        annotations:
+          summary: "Clock skew detected on {{ '{{' }} $labels.instance {{ '}}' }}"
+          description: >-
+            System clock is more than 50ms out of sync for 10 minutes.
+            This can cause certificate validation failures and log
+            timestamp inconsistencies. Check NTP status with: timedatectl
+
+      - alert: HostSwapFillingUp
+        expr: >-
+          (
+            (node_memory_SwapTotal_bytes - node_memory_SwapFree_bytes)
+          /
+            clamp_min(node_memory_SwapTotal_bytes, 1)
+          ) > 0.8
+            and
+          node_memory_SwapTotal_bytes > 0
+        for: 15m
+        labels:
+          severity: warning
+        annotations:
+          summary: "Host swap usage exceeds 80% on {{ '{{' }} $labels.instance {{ '}}' }}"
+          description: >-
+            Swap utilisation has exceeded 80% for 15 minutes. Heavy swapping
+            causes I/O-bound latency across all services on the host. Check
+            memory pressure: free -h && vmstat 1 5
+
+      - alert: HostCpuStealHigh
+        expr: >-
+          avg by (instance) (rate(node_cpu_seconds_total{mode="steal"}[5m])) * 100 > 10
+        for: 15m
+        labels:
+          severity: warning
+        annotations:
+          summary: "Host CPU steal > 10% on {{ '{{' }} $labels.instance {{ '}}' }}"
+          description: >-
+            The hypervisor is stealing more than 10% of CPU cycles from this
+            VM for 15 minutes. Services will feel slower and noisier even
+            though internal CPU metrics look healthy. This is a
+            noisy-neighbour or host-contention signal — contact the VPS
+            provider or migrate workloads.
+{% endif %}
+
+{% if horde_monitoring_install_host_disk_alerts | default(true) | bool %}
+  # --- Host filesystem capacity projections ---
+  # These rules share the node_filesystem_* dependency with host-disk-usage
+  # above and are gated by the same flag.
+  - name: host-disk-projections
+    rules:
+      - alert: HostOutOfInodes
+        expr: >-
+          (
+            node_filesystem_files_free{fstype!~"tmpfs|overlay"}
+          /
+            clamp_min(node_filesystem_files{fstype!~"tmpfs|overlay"}, 1)
+          ) < 0.10
+        for: 10m
+        labels:
+          severity: warning
+        annotations:
+          summary: "Host inodes < 10% free on {{ '{{' }} $labels.mountpoint {{ '}}' }}"
+          description: >-
+            Filesystem mounted at {{ '{{' }} $labels.mountpoint {{ '}}' }} has less than
+            10% of inodes free. File creation will start failing well before
+            disk bytes are exhausted. Audit small-file-heavy directories
+            (container layers, log rotation artefacts).
+
+      - alert: HostDiskWillFillIn24h
+        expr: >-
+          predict_linear(node_filesystem_avail_bytes{fstype!~"tmpfs|overlay"}[6h], 24 * 3600) < 0
+            and
+          (
+            node_filesystem_avail_bytes{fstype!~"tmpfs|overlay"}
+          /
+            clamp_min(node_filesystem_size_bytes{fstype!~"tmpfs|overlay"}, 1)
+          ) < 0.30
+        for: 1h
+        labels:
+          severity: warning
+        annotations:
+          summary: "Host disk predicted to fill within 24h on {{ '{{' }} $labels.mountpoint {{ '}}' }}"
+          description: >-
+            Linear extrapolation of available bytes over the past 6 hours
+            predicts filesystem {{ '{{' }} $labels.mountpoint {{ '}}' }} will fill
+            within 24 hours. Current utilisation is already above 70%.
+            Review retention settings and capacity planning before the hard
+            critical threshold (< 5%) triggers.
 {% endif %}

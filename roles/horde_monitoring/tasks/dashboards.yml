@@ -272,6 +272,7 @@
     python3 /tmp/patch_dashboard_uid.py
     "{{ horde_monitoring_grafana_dashboard_dir }}/{{ item.0 }}/{{ item.1.path | basename }}"
     "{{ item.2 }}"
+    "{{ item.3 }}"
   become: true
   loop: "{{ _patch_targets }}"
   loop_control:
@@ -280,13 +281,13 @@
     _patch_targets: >-
       {{
         (horde_monitoring__app_dashboard_files.files | product(['app']) | map('reverse') | map('list')
-         | product(['mimir-app']) | map('flatten') | list)
+         | product([['mimir-app', horde_monitoring_application_datasource_name]]) | map('flatten') | list)
         +
         (horde_monitoring__app_dashboard_files.files | product(['app-public']) | map('reverse') | map('list')
-         | product(['mimir-public']) | map('flatten') | list)
+         | product([['mimir-public', horde_monitoring_public_datasource_name]]) | map('flatten') | list)
         +
         (horde_monitoring__infra_dashboard_files.files | product(['infra']) | map('reverse') | map('list')
-         | product(['mimir-infra']) | map('flatten') | list)
+         | product([['mimir-infra', horde_monitoring_infrastructure_datasource_name]]) | map('flatten') | list)
       }}
   changed_when: false
 

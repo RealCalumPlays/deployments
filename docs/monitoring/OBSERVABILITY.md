@@ -4,7 +4,7 @@ This runbook documents the full observability topology used by this
 repository, including:
 
 - Core metrics plane: Prometheus, Mimir, Grafana, and horde-exporter
-- Optional signal backends: Loki (logs), Tempo (traces), Pyroscope (profiles)
+- Signal backends: Loki (logs, enabled by default), plus optional Tempo (traces) and Pyroscope (profiles)
 - Host-side telemetry collector: Grafana Alloy on application hosts
 
 For deployment order and baseline setup, see [MONITORING.md](../../MONITORING.md).
@@ -46,7 +46,7 @@ For deployment order and baseline setup, see [MONITORING.md](../../MONITORING.md
 
 | Role | What it owns |
 | --- | --- |
-| `horde_monitoring` | Mimir, S3-compatible storage, Memcached, Grafana, optional Loki/Tempo/Pyroscope, Grafana datasource provisioning, monitoring alert rules, optional HAProxy backend insertion |
+| `horde_monitoring` | Mimir, S3-compatible storage, Memcached, Grafana, Loki by default, optional Tempo/Pyroscope, Grafana datasource provisioning, monitoring alert rules, optional HAProxy backend insertion |
 | `horde_stats_exporter` | `horde-exporter` systemd service and optional downsampling timer |
 | `horde_alloy` | App-host telemetry collection and forwarding (metrics/logs/traces) |
 | `prometheus.prometheus.*` (playbook) | Prometheus, Alertmanager, and optional node_exporter (not managed by `horde_monitoring`) |
@@ -59,19 +59,20 @@ For deployment order and baseline setup, see [MONITORING.md](../../MONITORING.md
 | Grafana | enabled | `horde_monitoring_install_grafana: true` |
 | S3-compatible storage (Mimir object storage) | enabled | `horde_monitoring_mimir_enable_s3: true` |
 | Memcached (Mimir cache) | enabled | `horde_monitoring_mimir_enable_memcached: true` |
-| Loki | disabled | `horde_monitoring_install_loki: false` |
+| Loki | enabled | `horde_monitoring_install_loki: true` |
 | Tempo | disabled | `horde_monitoring_install_tempo: false` |
 | Pyroscope | disabled | `horde_monitoring_install_pyroscope: false` |
 
 When S3 storage is enabled, the compose init step creates buckets for enabled
-components automatically (`mimir-blocks`, `mimir-ruler`, plus optional
-Loki/Tempo/Pyroscope buckets).
+components automatically (`mimir-blocks`, `mimir-ruler`, plus Loki by default
+and optional Tempo/Pyroscope buckets).
 
-## Enabling Optional Backends
+## Adjusting Signal Backends
 
 ```yaml
 # Example play vars
-horde_monitoring_install_loki: true
+# Disable Loki only for metrics-only deployments.
+horde_monitoring_install_loki: false
 horde_monitoring_install_tempo: true
 horde_monitoring_install_pyroscope: true
 ```
@@ -80,6 +81,7 @@ horde_monitoring_install_pyroscope: true
 
 | Variable | Default |
 | --- | --- |
+| `horde_monitoring_install_loki` | `true` |
 | `horde_monitoring_loki_image` | `grafana/loki:3.4.2` |
 | `horde_monitoring_loki_port` | `3100` |
 | `horde_monitoring_loki_retention_period` | `2160h` |
@@ -151,9 +153,13 @@ Prometheus rules for stack self-monitoring. Coverage includes:
 
 - Core: `Watchdog`, `MimirDown`, `MimirRequestErrors`, `MimirIngestionStalled`
 - S3 storage: `S3StorageDown` (disk capacity covered by host-level alerts)
+- Application health: `HordeExporterDown`, `HordeNoActiveImageWorkers`, `HordeNoActiveTextWorkers`, `HordeImageWorkerCountDrop`, `HordeImageQueueBacklog`, `HordeMaintenanceMode`, `HordeRaidMode`
+- Prometheus self-monitoring: `PrometheusTargetsMissing`, `PrometheusRemoteWriteErrors`, `PrometheusRuleEvaluationFailures`, `PrometheusNotConnectedToAlertmanager`, `PrometheusTSDBCompactionsFailing`
+- PostgreSQL (opt-in via `horde_monitoring_install_postgres_alerts`): `PostgresExporterDown`, `PostgresDown`, `PostgresTooManyConnections`, `PostgresDeadlocks`, `PostgresSlowQueries`, `PostgresReplicationLag`
 - Optional Loki: `LokiDown`, `LokiRequestErrors`, `LokiIngestionStalled`
 - Optional Tempo: `TempoDown`, `TempoRequestErrors`, `TempoIngestionStalled`
 - Optional Pyroscope: `PyroscopeDown`, `PyroscopeRequestErrors`, `PyroscopeIngestionStalled`
+- Host resource: `HostHighCpuLoad`, `HostHighMemoryUsage`, `HostOomKillDetected`, `HostSystemdServiceFailed`, `HostClockSkew`
 - Host disk alerts (require `node_filesystem_*` metrics and
   `horde_monitoring_host_filesystem_metrics_available: true`):
   `HostDiskUsageCritical`, `HostDiskUsageHigh`
@@ -252,7 +258,7 @@ your HAProxy config if you need proxied profile ingest/query access.
 ```bash
 # Core
 curl -sf http://127.0.0.1:9009/ready             # Mimir
-curl -sf http://127.0.0.1:9000/health            # S3 backend (embedded RustFS default)
+curl -sf http://127.0.0.1:3903/health            # S3 backend (embedded Garage admin API default)
 curl -sf http://127.0.0.1:3000/api/health        # Grafana
 
 # Optional

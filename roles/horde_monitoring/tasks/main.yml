@@ -71,10 +71,10 @@
 # When S3 is external (not embedded in the monitoring compose) and the operator
 # has NOT set horde_monitoring_s3_operator_managed=true, verify the endpoint is
 # reachable before proceeding. This catches misconfigurations and ordering
-# problems early (e.g. deploying monitoring before the remote rustfs host).
+# problems early (e.g. deploying monitoring before the remote garage host).
 - name: Pre-flight check — external S3 endpoint is reachable
   ansible.builtin.uri:
-    url: "{{ horde_monitoring_s3_api_url }}/health"
+    url: "{{ horde_monitoring_s3_healthcheck_url }}"
     method: GET
     status_code: [200, 403]
   register: horde_monitoring__s3_preflight

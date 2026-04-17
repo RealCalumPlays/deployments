@@ -37,3 +37,22 @@
     mode: "0644"
   become: true
   notify: Reload prometheus
+
+- name: Template monitoring stack recording rules
+  ansible.builtin.template:
+    src: recording-rules.yml.j2
+    dest: "{{ horde_monitoring_alerting_rules_dir }}/{{ horde_monitoring_recording_rules_file }}"
+    owner: root
+    group: root
+    mode: "0644"
+  become: true
+  notify: Reload prometheus
+  when: horde_monitoring_install_recording_rules | default(true) | bool
+
+- name: Remove recording rules file when disabled
+  ansible.builtin.file:
+    path: "{{ horde_monitoring_alerting_rules_dir }}/{{ horde_monitoring_recording_rules_file }}"
+    state: absent
+  become: true
+  notify: Reload prometheus
+  when: not (horde_monitoring_install_recording_rules | default(true) | bool)

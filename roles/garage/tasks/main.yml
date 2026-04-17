@@ -1,0 +1,353 @@
+---
+# Standalone Garage S3-compatible object storage deployment.
+# Deploys a Docker Compose stack with a Garage container and optional
+# bucket bootstrap sidecar, managed by a systemd unit.
+
+- name: Verify Docker is available
+  ansible.builtin.command: docker --version
+  changed_when: false
+  failed_when: false
+  register: garage__docker_check
+  become: true
+
+- name: Fail if Docker is not installed
+  ansible.builtin.fail:
+    msg: "Docker is required for Garage. Please install Docker first."
+  when: garage__docker_check.rc != 0
+
+- name: Verify Docker Compose V2 is available
+  ansible.builtin.command: docker compose version
+  changed_when: false
+  failed_when: false
+  register: garage__compose_check
+  become: true
+
+- name: Fail if Docker Compose V2 is not available
+  ansible.builtin.fail:
+    msg: >-
+      Docker Compose V2 plugin is required but 'docker compose version' failed.
+      Please install the Docker Compose V2 plugin:
+      https://docs.docker.com/compose/install/
+  when: garage__compose_check.rc != 0
+
+- name: Fail if default Garage secret key is unchanged
+  ansible.builtin.fail:
+    msg: >-
+      garage_secret_key is still set to the default placeholder
+      'changeme-garage-secret'. Override it in your inventory or vault.
+  when:
+    - garage_start_services | bool
+    - garage_secret_key == "changeme-garage-secret"
+
+- name: Fail if default Garage admin token is unchanged
+  ansible.builtin.fail:
+    msg: >-
+      garage_admin_token is still set to the default placeholder
+      'changeme-garage-admin-token'. Override it in your inventory or vault.
+  when:
+    - garage_start_services | bool
+    - garage_admin_token == "changeme-garage-admin-token"
+
+- name: Fail if default Garage RPC secret is unchanged
+  ansible.builtin.fail:
+    msg: >-
+      garage_rpc_secret is still set to the default placeholder
+      'changeme-garage-rpc-secret'. Override it in your inventory or vault.
+  when:
+    - garage_start_services | bool
+    - garage_rpc_secret == "changeme-garage-rpc-secret"
+
+- name: Fail if Garage access key ID format is invalid
+  ansible.builtin.fail:
+    msg: >-
+      garage_access_key must be a valid Garage key ID (GK + 24 hex chars),
+      for example GK00112233445566778899aabb.
+  when:
+    - garage_start_services | bool
+    - garage_buckets | default([]) | length > 0
+    - garage_access_key is not match('^GK[0-9a-fA-F]{24}$')
+
+- name: Fail if Garage secret key format is invalid
+  ansible.builtin.fail:
+    msg: >-
+      garage_secret_key must be a valid Garage secret key
+      (64 hex chars / 32 bytes) when bootstrapping buckets.
+  when:
+    - garage_start_services | bool
+    - garage_buckets | default([]) | length > 0
+    - garage_secret_key is not match('^[0-9a-fA-F]{64}$')
+
+- name: Create Garage data directory
+  ansible.builtin.file:
+    path: "{{ garage_data_dir }}"
+    state: directory
+    owner: root
+    group: root
+    mode: "0755"
+  become: true
+
+- name: Create Garage metadata directory
+  ansible.builtin.file:
+    path: "{{ garage_metadata_dir }}"
+    state: directory
+    owner: root
+    group: root
+    mode: "0755"
+  become: true
+
+- name: Create Garage config directory
+  ansible.builtin.file:
+    path: "{{ garage_config_dir }}"
+    state: directory
+    owner: root
+    group: root
+    mode: "0755"
+  become: true
+
+- name: Create Garage compose directory
+  ansible.builtin.file:
+    path: "{{ garage_compose_dir }}"
+    state: directory
+    owner: root
+    group: root
+    mode: "0755"
+  become: true
+
+- name: Template Garage configuration
+  ansible.builtin.template:
+    src: garage.toml.j2
+    dest: "{{ garage_config_dir }}/garage.toml"
+    owner: root
+    group: root
+    mode: "0600"
+    backup: true
+  become: true
+  notify: Restart garage
+
+- name: Template Docker Compose for Garage
+  ansible.builtin.template:
+    src: docker-compose.garage.yml.j2
+    dest: "{{ garage_compose_dir }}/docker-compose.yml"
+    owner: root
+    group: root
+    mode: "0600"
+    backup: true
+  become: true
+  no_log: true
+  notify: Restart garage
+
+- name: Template systemd service for Garage
+  ansible.builtin.template:
+    src: garage.service.j2
+    dest: /etc/systemd/system/garage.service
+    mode: "0644"
+  become: true
+  notify:
+    - Reload systemd (garage)
+
+- name: Flush pending handlers before starting services
+  ansible.builtin.meta: flush_handlers
+
+- name: Enable and start Garage
+  ansible.builtin.systemd:
+    name: garage
+    enabled: true
+    state: started
+    daemon_reload: true
+  become: true
+  when: garage_start_services | bool
+
+# Detect stale systemd state (containers gone but unit reports active).
+- name: Check if Garage container is actually running
+  ansible.builtin.command: docker inspect --format '{{ '{{' }}.State.Running{{ '}}' }}' garage
+  register: garage__container_state
+  changed_when: false
+  failed_when: false
+  become: true
+  when: garage_start_services | bool
+
+- name: Restart Garage if container is not running
+  ansible.builtin.systemd:
+    name: garage
+    state: restarted
+  become: true
+  when:
+    - garage_start_services | bool
+    - garage__container_state.stdout | default('false') != 'true'
+
+# --- Garage cluster initialization via CLI ---
+# Uses docker exec to run the /garage CLI binary inside the running container.
+# This is robust and avoids fragile JSON-parsing-in-shell.
+
+- name: Wait for Garage to accept CLI commands
+  ansible.builtin.command:
+    cmd: docker exec garage /garage -c /etc/garage.toml status
+  register: garage__cli_ready
+  changed_when: false
+  until: garage__cli_ready.rc == 0
+  retries: 15
+  delay: 3
+  become: true
+  when:
+    - garage_start_services | bool
+    - garage_buckets | default([]) | length > 0
+
+- name: Get Garage node ID
+  ansible.builtin.command:
+    cmd: docker exec garage /garage -c /etc/garage.toml node id
+  register: garage__node_id_raw
+  changed_when: false
+  become: true
+  when:
+    - garage_start_services | bool
+    - garage_buckets | default([]) | length > 0
+
+- name: Parse Garage node ID for layout assignment
+  ansible.builtin.set_fact:
+    garage__node_id: >-
+      {{ (garage__node_id_raw.stdout | regex_findall('([0-9a-f]{16,64})@') | first)
+         | default('', true) }}
+  when:
+    - garage_start_services | bool
+    - garage_buckets | default([]) | length > 0
+
+- name: Check if Garage layout is already applied
+  ansible.builtin.uri:
+    url: "{{ garage_healthcheck_url }}"
+    method: GET
+    status_code: [200, 503]
+  register: garage__health_precheck
+  become: true
+  when:
+    - garage_start_services | bool
+    - garage_buckets | default([]) | length > 0
+    - garage_healthcheck_url | default('') | length > 0
+
+- name: Assign Garage single-node layout
+  ansible.builtin.command:
+    argv:
+      - docker
+      - exec
+      - garage
+      - /garage
+      - -c
+      - /etc/garage.toml
+      - layout
+      - assign
+      - "{{ garage__node_id }}"
+      - --zone
+      - dc1
+      - --capacity
+      - "{{ garage_capacity | human_to_bytes }}"
+  become: true
+  when:
+    - garage_start_services | bool
+    - garage_buckets | default([]) | length > 0
+    - garage__health_precheck.status | default(503) == 503
+
+- name: Apply Garage layout (version 1)
+  ansible.builtin.command:
+    argv:
+      - docker
+      - exec
+      - garage
+      - /garage
+      - -c
+      - /etc/garage.toml
+      - layout
+      - apply
+      - --version
+      - "1"
+  become: true
+  when:
+    - garage_start_services | bool
+    - garage_buckets | default([]) | length > 0
+    - garage__health_precheck.status | default(503) == 503
+
+- name: Import Garage S3 access key
+  ansible.builtin.command:
+    argv:
+      - docker
+      - exec
+      - garage
+      - /garage
+      - -c
+      - /etc/garage.toml
+      - key
+      - import
+      - --yes
+      - -n
+      - "{{ garage_access_key_name }}"
+      - "{{ garage_access_key }}"
+      - "{{ garage_secret_key }}"
+  register: garage__key_import
+  changed_when: garage__key_import.rc == 0
+  failed_when: >-
+    garage__key_import.rc != 0 and
+    ('KeyAlreadyExists' not in
+      ((garage__key_import.stdout | default('')) ~ ' ' ~ (garage__key_import.stderr | default(''))))
+  become: true
+  no_log: true
+  when:
+    - garage_start_services | bool
+    - garage_buckets | default([]) | length > 0
+
+- name: Create Garage buckets
+  ansible.builtin.command:
+    argv:
+      - docker
+      - exec
+      - garage
+      - /garage
+      - -c
+      - /etc/garage.toml
+      - bucket
+      - create
+      - "{{ item }}"
+  register: garage__bucket_create
+  changed_when: garage__bucket_create.rc == 0
+  failed_when: >-
+    garage__bucket_create.rc != 0 and
+    ('BucketAlreadyExists' not in
+      ((garage__bucket_create.stdout | default('')) ~ ' ' ~ (garage__bucket_create.stderr | default(''))))
+  become: true
+  loop: "{{ garage_buckets }}"
+  when: garage_start_services | bool
+
+- name: Grant Garage bucket permissions
+  ansible.builtin.command:
+    argv:
+      - docker
+      - exec
+      - garage
+      - /garage
+      - -c
+      - /etc/garage.toml
+      - bucket
+      - allow
+      - --read
+      - --write
+      - --owner
+      - "{{ item }}"
+      - --key
+      - "{{ garage_access_key_name }}"
+  register: garage__bucket_allow
+  changed_when: garage__bucket_allow.rc == 0
+  failed_when: garage__bucket_allow.rc != 0
+  become: true
+  loop: "{{ garage_buckets }}"
+  when: garage_start_services | bool
+
+- name: Wait for Garage health endpoint
+  ansible.builtin.uri:
+    url: "{{ garage_healthcheck_url }}"
+    method: GET
+    status_code: 200
+  register: garage__health
+  until: garage__health.status == 200
+  retries: 15
+  delay: 3
+  become: true
+  when:
+    - garage_start_services | bool
+    - garage_healthcheck_url | default('') | length > 0

@@ -40,6 +40,7 @@ storage_config:
     bucketnames: {{ horde_monitoring_loki_chunks_bucket }}
     s3forcepathstyle: {{ horde_monitoring_s3_force_path_style | bool | lower }}
     insecure: {{ horde_monitoring_s3_insecure | bool | lower }}
+    region: {{ horde_monitoring_s3_region }}
 {% else %}
 storage_config:
   tsdb_shipper:
@@ -92,6 +93,7 @@ ruler:
       bucketnames: {{ horde_monitoring_loki_chunks_bucket }}
       s3forcepathstyle: {{ horde_monitoring_s3_force_path_style | bool | lower }}
       insecure: {{ horde_monitoring_s3_insecure | bool | lower }}
+      region: {{ horde_monitoring_s3_region }}
 {% else %}
   storage:
     type: local
