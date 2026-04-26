@@ -114,8 +114,7 @@ horde_monitoring_s3_memory_limit: "512m"
 # In external mode, the standalone garage role exposes metrics through an
 # authenticated HAProxy proxy (basic-auth → Bearer translation).
 # These defaults are intentionally empty/safe so that an operator must
-# explicitly wire them (typically via hostvars lookups in group_vars, as
-# demonstrated in ops/group_vars/mimir/vars.yml).
+# explicitly wire them (typically via hostvars lookups in inventory/group_vars).
 horde_monitoring_external_s3_host: ""
 horde_monitoring_external_s3_port: 3900
 horde_monitoring_external_s3_metrics_port: 3910
@@ -290,10 +289,19 @@ horde_monitoring_grafana_provision_dashboards: true
 # entry will be rendered, no infra/ subdir created).
 horde_monitoring_grafana_provision_infra_dashboards: true
 
+# Audience filename convention for app dashboards (Org 1 admin vs Org 2 public).
+# A bare-name dashboard (e.g. horde-image-workers-overview.json) goes to BOTH
+# orgs unless it has a `<name>-public.json` sibling (in which case Org 2 gets
+# the public variant) OR its basename is listed below as Org-1-only.
+# horde-operations-overview.json ships in this list because it queries
+# Alertmanager / mimir-telemetry / loki-app, which are Org-1 datasources only.
+horde_monitoring_grafana_app_dashboards_org1_only:
+  - horde-operations-overview.json
+
 # Pinned release tag for the horde-exporters project.
 # In release mode the role downloads the release manifest from this tag and
 # resolves the actual dashboard tarball filename and checksum automatically.
-horde_monitoring_grafana_dashboards_release_version: "v0.1.5"
+horde_monitoring_grafana_dashboards_release_version: "v0.2.0"
 
 # --- release mode settings ---
 # GitHub repository that hosts the releases.
@@ -326,10 +334,19 @@ horde_monitoring_grafana_dashboards_local_infra_path: "infra"
 
 # Alertmanager datasource in Grafana
 # When set to a non-empty URL, provisions an Alertmanager datasource in Grafana
-# so alerts are visible in the Grafana Alerting UI.  In production (Alertmanager
-# native on host, Grafana in Docker), use "http://host.docker.internal:9093".
+# so alerts are visible in the Grafana Alerting UI. This URL is also used as
+# the default Mimir ruler notification target when
+# horde_monitoring_ruler_alertmanager_url is not set.
+# In production (Alertmanager native on host, Grafana in Docker), use
+# "http://host.docker.internal:9093".
 # Leave empty to skip provisioning this datasource.
 horde_monitoring_alertmanager_url: ""
+
+# Optional explicit Alertmanager URL used by Mimir ruler notifications.
+# Default behavior: if unset/empty, falls back to horde_monitoring_alertmanager_url.
+# If both are empty, falls back to Mimir's internal alertmanager URL
+# (http://127.0.0.1:9009/alertmanager).
+horde_monitoring_ruler_alertmanager_url: ""
 
 # Alerting rules for monitoring stack self-monitoring
 # Renders a Prometheus alerting rules file for Mimir, S3 storage, and pipeline health.
@@ -374,6 +391,17 @@ horde_monitoring_install_otlp_app_alerts: true
 # Thresholds used by the OTLP app alerts (seconds, p95).
 horde_monitoring_otlp_generate_p95_threshold_seconds: 2.0
 horde_monitoring_otlp_pop_p95_threshold_seconds: 1.0
+# Submit fault ratio threshold (0..1). HordeSubmitFaultRate fires when
+# rate(faulted) / rate(total) exceeds this for 15 minutes.
+horde_monitoring_otlp_submit_fault_ratio: 0.05
+# Censored submissions per second. HordeSubmitCensoredSpike fires when
+# the absolute rate exceeds this for 10 minutes (cross-check raid mode).
+horde_monitoring_otlp_submit_censored_per_sec: 0.5
+
+# Loki ruler — log-derived alerts on the AI-Horde application stream.
+# Requires Loki to be deployed and ingesting AI-Horde logs (via Alloy).
+# Rules are pushed to the application tenant via the Loki ruler API.
+horde_monitoring_install_loki_app_log_alerts: true
 
 # Prometheus self-monitoring alerts (remote write, rule evaluation, targets).
 horde_monitoring_install_prometheus_alerts: true
@@ -381,6 +409,12 @@ horde_monitoring_install_prometheus_alerts: true
 # PostgreSQL alerts (via postgres_exporter).
 # Set to true when postgres_exporter is deployed and scraped by Prometheus.
 horde_monitoring_install_postgres_alerts: false
+
+# When postgres alerts are enabled, fail fast if Prometheus has no series for
+# pg_stat_activity_max_tx_duration on horde_monitoring_postgres_job_name.
+# HordePostgresLongRunningTx is based on this built-in postgres_exporter metric
+# and does not require extend.query-path custom query files.
+horde_monitoring_require_postgres_tx_duration_metric: true
 
 # ---------------------------------------------------------------------------
 # Loki (log aggregation — Docker-based, monolithic mode, S3-compatible storage)
@@ -554,6 +588,21 @@ horde_monitoring_tempo_ingestion_port: 4320
 # horde_alloy_basic_auth_username / password on remote Alloy agents.
 horde_monitoring_tempo_ingestion_auth_user: "alloy"
 horde_monitoring_tempo_ingestion_auth_password: "changeme-tempo-ingestion"
+
+# Service-alerts egress frontend — exposes Alertmanager + Mimir read API to
+# a remote ai-horde-service-alerts middleman behind HAProxy basic auth.
+# Path routing: /prometheus/* -> Mimir, /api/v2/* and /-/* -> Alertmanager.
+# When enabled, the Alertmanager backend is rendered automatically (no need
+# to also set horde_monitoring_configure_alertmanager_backend).
+horde_monitoring_configure_service_alerts_egress_frontend: false
+# Bind address + port for the egress frontend. Default 127.0.0.1 keeps the
+# frontend loopback-only; override to 0.0.0.0 for off-host service-alerts.
+horde_monitoring_service_alerts_egress_listen: "127.0.0.1"
+horde_monitoring_service_alerts_egress_port: 9494
+# Basic auth credentials — override in vault. Must match
+# horde_service_alerts_upstream_basic_auth_user / password on the consumer.
+horde_monitoring_service_alerts_egress_auth_user: "service-alerts"
+horde_monitoring_service_alerts_egress_auth_password: "changeme-service-alerts-egress"
 
 # HAProxy configuration (conf.d architecture via _haproxy_confd_bootstrap)
 horde_monitoring_haproxy_config_path: "/etc/haproxy/haproxy.cfg"

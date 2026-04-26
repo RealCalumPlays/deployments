@@ -126,13 +126,35 @@ complete example playbook.
 | ---------------------------- | ----------- | ------------------------------------------------ |
 | `horde_alloy_tempo_endpoint`       | `""`        | Tempo OTLP endpoint (required if traces enabled) |
 | `horde_alloy_collect_traces`       | `true`      | Enable OTLP trace receiver                       |
-| `horde_alloy_otlp_listen_address`  | `127.0.0.1` | OTLP receiver bind address                       |
+| `horde_alloy_otlp_listen_address`  | `0.0.0.0`   | OTLP receiver bind address                       |
 | `horde_alloy_otlp_grpc_port`       | `4317`      | OTLP gRPC port                                   |
 | `horde_alloy_otlp_http_port`       | `4318`      | OTLP HTTP port                                   |
 | `horde_alloy_trace_batch_timeout`  | `5s`                   | Batch flush interval                                                                                                     |
 | `horde_alloy_trace_batch_size`     | `8192`                 | Max batch size (spans)                                                                                                   |
-| `horde_alloy_forward_otlp_metrics` | `true`                 | Forward OTLP metrics to Mimir                                                                                            |
+| `horde_alloy_forward_otlp_metrics` | `true`                 | Forward OTLP metrics to Mimir via OTLP HTTP endpoint                                                                     |
+| `horde_alloy_mimir_otlp_endpoint`  | `""`                   | Mimir OTLP ingest endpoint (required when `horde_alloy_forward_otlp_metrics: true`; e.g. `https://mimir.example.com/otlp`) |
 | `horde_alloy_otlp_metrics_tenant_id` | `ai-horde-telemetry` | Mimir tenant for OTLP-sourced metrics; defaults to the dedicated telemetry tenant with short retention (3d) to contain high-churn derived metric cardinality |
+
+### Trace Filtering and Sampling
+
+Pre-sampling span filtering (drops matching spans before sampling decisions):
+
+| Variable | Default | Description |
+| -------- | ------- | ----------- |
+| `horde_alloy_trace_filter_enabled` | `true` | Enable pre-sampling span filter |
+| `horde_alloy_trace_filter_exclude_spans` | `[]` | List of filter expressions to drop spans (see defaults/main.yml for syntax) |
+
+Tail-based sampling (probabilistic with latency overrides):
+
+| Variable | Default | Description |
+| -------- | ------- | ----------- |
+| `horde_alloy_trace_tail_sampling_enabled` | `true` | Enable tail sampling |
+| `horde_alloy_trace_sampling_decision_wait` | `10s` | How long to wait before making a sampling decision |
+| `horde_alloy_trace_sampling_num_traces` | `50000` | Max number of traces held in memory |
+| `horde_alloy_trace_sampling_expected_new_per_sec` | `100` | Expected new traces/sec (used for memory sizing) |
+| `horde_alloy_trace_sampling_latency_ms` | `1000` | Always-sample threshold: traces with any span over this ms are kept |
+| `horde_alloy_trace_sampling_probability` | `0.1` | Probability for traces that don't meet latency threshold (0.0–1.0) |
+| `horde_alloy_trace_sampling_extra_policies` | `[]` | Additional otelcol.processor.tail_sampling policy blocks |
 
 ## Validation
 
@@ -151,7 +173,7 @@ export OTEL_EXPORTER_OTLP_PROTOCOL="http/protobuf"
 export OTEL_SERVICE_NAME="my-service"
 ```
 
-See [docs/OBSERVABILITY.md](../../docs/OBSERVABILITY.md) for Python and
+See [docs/monitoring/OBSERVABILITY.md](../../docs/monitoring/OBSERVABILITY.md) for Python and
 Node.js instrumentation examples and trace-log correlation setup.
 
 ## Verification
@@ -172,7 +194,7 @@ curl -s http://127.0.0.1:12345/-/healthy
 
 ## Related Documentation
 
-- [Observability Stack](../../docs/OBSERVABILITY.md) — Loki, Tempo, Alloy architecture and OTLP instrumentation
+- [Observability Stack](../../docs/monitoring/OBSERVABILITY.md) — Loki, Tempo, Alloy architecture and OTLP instrumentation
 - [horde_monitoring role](../horde_monitoring/README.md) — Central Mimir + Grafana stack
 - [Alloy example playbook](../../examples/alloy_app_host.yml)
 

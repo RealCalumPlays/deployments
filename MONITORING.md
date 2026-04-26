@@ -81,18 +81,7 @@ When `horde_monitoring_install_host_disk_alerts: true`, ensure Prometheus
 ingests `node_filesystem_*` metrics and set
 `horde_monitoring_host_filesystem_metrics_available: true`.
 
-### Node Exporter TLS Automation
-
-- `examples/horde_monitoring_stack.yml` defaults to
-  `horde_node_exporter_tls_mode: internal_ca`.
-- In `internal_ca` mode, the playbook generates:
-  - `tls/ca.crt` and `tls/ca.key` on the Ansible controller
-  - `tls/<inventory_hostname>.crt` and `tls/<inventory_hostname>.key` per host
-- Generated artifacts are idempotent (`creates:`) and reused on re-runs.
-- Use `horde_node_exporter_tls_mode: provided` to keep external/manual certs.
-  In that mode, the playbook expects `tls/ca.crt` plus per-host cert/key files.
-
-Prometheus trusts node_exporter certificates via `/etc/prometheus/ca.crt`.
+### Node Exporter
 
 Node exporter scrape target wiring is automatic:
 
@@ -241,20 +230,9 @@ To add custom dashboards, place JSON files in `grafana_dashboard_dir`
 
 ### Public-org dashboard convention
 
-Dashboards are routed between Org 1 (admin) and Org 2 (public/anonymous) using
-a filename suffix convention:
+Dashboards in the `horde-exporters/dashboards` directory are only included in the non-public Grafana org by default. AI-Horde application dashbaords
+from the `ai-horde-stats-exporter` package are included in both orgs by default. 
 
-| Filename pattern                                                        | Org 1 (`app/`) | Org 2 (`app-public/`) |
-| ----------------------------------------------------------------------- | :------------: | :-------------------: |
-| `<name>.json` (no `-public` sibling, not in `org1_only`)                |       ✓        |           ✓           |
-| `<name>.json` **and** `<name>-public.json` exists                       |       ✓        |           —           |
-| `<name>-public.json`                                                    |       —        |           ✓           |
-| basenames listed in `horde_monitoring_grafana_app_dashboards_org1_only` |       ✓        |           —           |
-
-`horde-operations-overview.json` is the canonical Org-1-only dashboard
-(it queries Alertmanager, mimir-telemetry, loki-app — none of which exist in
-Org 2). `horde-performance.json` ships with a `horde-performance-public.json`
-sibling that strips the alertlist + OTLP-only rows.
 
 ### Operations Overview dashboard
 

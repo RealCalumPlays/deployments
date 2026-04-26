@@ -260,21 +260,21 @@ The audience filename convention for app dashboards is documented in
 | `horde_monitoring_loki_port`               | `3100`               | HTTP API port           |
 | `horde_monitoring_loki_retention_period`   | `2160h`              | Log retention (90 days) |
 
-### Tempo (Opt-in)
+### Tempo (Enabled by default)
 
 | Variable                          | Default               | Description                  |
 | --------------------------------- | --------------------- | ---------------------------- |
-| `horde_monitoring_install_tempo`        | `false`               | Enable Tempo                 |
+| `horde_monitoring_install_tempo`        | `true`                | Enable Tempo                 |
 | `horde_monitoring_tempo_image`                     | `grafana/tempo:2.7.1` | Tempo image (pinned)         |
 | `horde_monitoring_tempo_http_port`                 | `3200`                | HTTP API port                |
 | `horde_monitoring_tempo_trace_retention`           | `168h`                | Trace retention (7 days)     |
 | `horde_monitoring_tempo_metrics_generator_enabled` | `true`                | Generate metrics from traces |
 
-### Pyroscope (Opt-in)
+### Pyroscope (Enabled by default)
 
 | Variable                       | Default                    | Description              |
 | ------------------------------ | -------------------------- | ------------------------ |
-| `horde_monitoring_install_pyroscope` | `false`                    | Enable Pyroscope         |
+| `horde_monitoring_install_pyroscope` | `true`                     | Enable Pyroscope         |
 | `horde_monitoring_pyroscope_image`              | `grafana/pyroscope:1.19.0` | Pyroscope image (pinned) |
 | `horde_monitoring_pyroscope_port`               | `4040`                     | HTTP API port            |
 

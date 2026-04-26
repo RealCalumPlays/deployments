@@ -77,8 +77,8 @@ garage_start_services: true
 # that exposes the Garage admin /metrics endpoint behind basic auth.
 # The proxy translates basic-auth into a Bearer token for the Garage admin API,
 # keeping the admin port bound to localhost.
-# Variable names match the convention used in ops/group_vars/garage/vars.yml
-# so that the monitoring role can resolve credentials via hostvars lookups.
+# Variable names match the inventory/group_vars convention so that the
+# monitoring role can resolve credentials via hostvars lookups.
 garage_metrics_haproxy_enabled: false
 garage_metrics_haproxy_bind_address: "0.0.0.0"
 garage_metrics_haproxy_port: 3910
