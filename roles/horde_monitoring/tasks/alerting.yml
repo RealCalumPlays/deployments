@@ -4,19 +4,9 @@
 #
 # The rendered rules file is placed in the Prometheus rules directory where
 # it is automatically loaded by Prometheus via the rule_files glob.
-
-- name: Fail when host disk alerts are enabled without host filesystem metrics
-  ansible.builtin.fail:
-    msg: >-
-      horde_monitoring_install_host_disk_alerts=true requires
-      node_filesystem_* metrics in Prometheus.
-      Set horde_monitoring_host_filesystem_metrics_available=true only when
-      host filesystem metrics are actually ingested (node_exporter or Alloy),
-      or disable host disk alerts with horde_monitoring_install_host_disk_alerts=false.
-  when:
-    - horde_monitoring_start_services | bool
-    - horde_monitoring_install_host_disk_alerts | default(true) | bool
-    - not (horde_monitoring_host_filesystem_metrics_available | default(false) | bool)
+# NOTE: the host-filesystem metrics prerequisite guard lives in tasks/main.yml
+# (before any include_tasks) so it fires as a true pre-flight check regardless
+# of which backends are being installed.
 
 - name: Probe Prometheus targets for postgres job (when postgres alerts enabled)
   ansible.builtin.uri:
