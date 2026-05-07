@@ -1,2 +1,3 @@
 # Internal micro-roles intentionally use leading underscores.
 roles/_uv_bootstrap role-name
+roles/_haproxy_confd_bootstrap_ role-name
