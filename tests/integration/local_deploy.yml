@@ -57,3 +57,12 @@
           AI_HORDE_BASE_DIR={{ ai_horde_base_dir }}
         dest: "{{ ai_horde_base_dir }}/local-deploy.env"
         mode: "0644"
+
+    - name: Create AI-Horde source directory owned by invoking user
+      ansible.builtin.file:
+        path: "{{ ai_horde_base_dir }}/src"
+        state: directory
+        owner: "{{ lookup('env', 'USER') }}"
+        group: "{{ lookup('env', 'USER') }}"
+        mode: "0755"
+      become: true
