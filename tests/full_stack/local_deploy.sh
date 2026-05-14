@@ -810,7 +810,6 @@ cmd_down() {
   dc_haproxy down --remove-orphans 2>/dev/null || true
   dc_monitoring down --remove-orphans 2>/dev/null || true
   dc_model_reference down --remove-orphans 2>/dev/null || true
-  dc_service_alerts down --remove-orphans 2>/dev/null || true
   dc_frontpage down --remove-orphans 2>/dev/null || true
   dc_backend down --remove-orphans 2>/dev/null || true
 
@@ -831,9 +830,6 @@ cmd_status() {
   echo ""
   info "─── horde-model-reference ───"
   dc_model_reference ps --format "table {{.Name}}\t{{.Status}}\t{{.Ports}}" 2>/dev/null || echo "  (not running)"
-  echo ""
-  info "─── ai-horde-service-alerts ───"
-  dc_service_alerts ps --format "table {{.Name}}\t{{.Status}}\t{{.Ports}}" 2>/dev/null || echo "  (not running)"
   echo ""
   info "─── HAProxy ───"
   dc_haproxy ps --format "table {{.Name}}\t{{.Status}}\t{{.Ports}}" 2>/dev/null || echo "  (not running)"
@@ -859,9 +855,6 @@ cmd_logs() {
     model-reference|models)
       dc_model_reference logs -f --tail=100
       ;;
-    service-alerts|alerts)
-      dc_service_alerts logs -f --tail=100
-      ;;
     haproxy)
       dc_haproxy logs -f --tail=100
       ;;
@@ -881,8 +874,6 @@ cmd_logs() {
       dc_frontpage logs --tail=20 2>/dev/null || true
       echo "---"
       dc_model_reference logs --tail=20 2>/dev/null || true
-      echo "---"
-      dc_service_alerts logs --tail=20 2>/dev/null || true
       echo "---"
       dc_haproxy logs --tail=20 2>/dev/null || true
       ;;
